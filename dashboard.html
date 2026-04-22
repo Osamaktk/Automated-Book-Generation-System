@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AutoBook — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0d0d;
+      --surface:   #161616;
+      --surface2:  #1e1e1e;
+      --border:    #2a2a2a;
+      --gold:      #c9a84c;
+      --gold-dim:  #8a6f2e;
+      --cream:     #f0e6d3;
+      --muted:     #6b6b6b;
+      --success:   #4caf7d;
+      --danger:    #c94c4c;
+      --warn:      #c9914c;
+      --radius:    10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--cream);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 260px;
+      min-height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 32px 0;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+    }
+
+    .sidebar-logo {
+      padding: 0 28px 32px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-logo h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 22px;
+      color: var(--gold);
+      letter-spacing: 1px;
+    }
+
+    .sidebar-logo p {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .sidebar-nav {
+      padding: 24px 16px;
+      flex: 1;
+    }
+
+    .nav-label {
+      font-size: 10px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--muted);
+      padding: 0 12px;
+      margin-bottom: 8px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 14px;
+      color: var(--muted);
+      transition: all 0.2s;
+      margin-bottom: 2px;
+    }
+
+    .nav-item:hover { background: var(--surface2); color: var(--cream); }
+    .nav-item.active { background: var(--surface2); color: var(--gold); border-left: 2px solid var(--gold); }
+    .nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+
+    /* ── MAIN ── */
+    .main {
+      margin-left: 260px;
+      flex: 1;
+      padding: 40px 48px;
+      min-height: 100vh;
+    }
+
+    .page-header {
+      margin-bottom: 36px;
+    }
+
+    .page-header h2 {
+      font-family: 'Playfair Display', serif;
+      font-size: 32px;
+      color: var(--cream);
+      font-weight: 600;
+    }
+
+    .page-header p {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 18px;
+      color: var(--cream);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* ── BOOK GRID ── */
+    .book-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .book-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .book-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transition: transform 0.2s;
+    }
+
+    .book-card:hover { border-color: var(--gold-dim); transform: translateY(-2px); }
+    .book-card:hover::before { transform: scaleX(1); }
+
+    .book-title {
+      font-family: 'Playfair Display', serif;
+      font-size: 17px;
+      color: var(--cream);
+      margin-bottom: 8px;
+    }
+
+    .book-notes {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 16px;
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ── STATUS BADGES ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-review  { background: rgba(201,168,76,0.15);  color: var(--gold);    border: 1px solid rgba(201,168,76,0.3); }
+    .badge-approved{ background: rgba(76,175,125,0.15);  color: var(--success); border: 1px solid rgba(76,175,125,0.3); }
+    .badge-progress{ background: rgba(201,145,76,0.15);  color: var(--warn);    border: 1px solid rgba(201,145,76,0.3); }
+    .badge-generating{ background: rgba(100,100,200,0.15); color: #9090ff;      border: 1px solid rgba(100,100,200,0.3); }
+    .badge-default { background: rgba(107,107,107,0.15); color: var(--muted);   border: 1px solid rgba(107,107,107,0.3); }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+    }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-gold    { background: var(--gold);    color: #0d0d0d; }
+    .btn-gold:hover:not(:disabled) { background: #d4b45a; }
+
+    .btn-success { background: var(--success); color: #0d0d0d; }
+    .btn-success:hover:not(:disabled) { background: #5fc491; }
+
+    .btn-danger  { background: var(--danger);  color: var(--cream); }
+    .btn-danger:hover:not(:disabled) { background: #d45f5f; }
+
+    .btn-ghost   { background: var(--surface2); color: var(--cream); border: 1px solid var(--border); }
+    .btn-ghost:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+
+    .btn-sm { padding: 7px 14px; font-size: 12px; }
+
+    /* ── FORM ── */
+    .form-group { margin-bottom: 20px; }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .form-input, .form-textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--cream);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 14px;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus, .form-textarea:focus { border-color: var(--gold); }
+    .form-textarea { resize: vertical; min-height: 100px; }
+
+    /* ── CONTENT VIEWER ── */
+    .content-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--cream);
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .content-box::-webkit-scrollbar { width: 4px; }
+    .content-box::-webkit-scrollbar-track { background: transparent; }
+    .content-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* ── CHAPTER LIST ── */
+    .chapter-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 8px;
+      background: var(--surface2);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chapter-item:hover { border-color: var(--gold-dim); }
+
+    .chapter-num {
+      font-family: 'Playfair Display', serif;
+      font-size: 13px;
+      color: var(--gold);
+      margin-right: 12px;
+      min-width: 80px;
+    }
+
+    /* ── PROGRESS BAR ── */
+    .progress-wrap {
+      background: var(--surface2);
+      border-radius: 20px;
+      height: 6px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+      border-radius: 20px;
+      transition: width 0.5s ease;
+    }
+
+    /* ── DIVIDER ── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+    /* ── LOADING ── */
+    .loading-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 0;
+      gap: 16px;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-msg { font-size: 14px; color: var(--muted); }
+
+    /* ── ALERT ── */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .alert-success { background: rgba(76,175,125,0.1); border: 1px solid rgba(76,175,125,0.3); color: var(--success); }
+    .alert-error   { background: rgba(201,76,76,0.1);  border: 1px solid rgba(201,76,76,0.3);  color: var(--danger); }
+    .alert-info    { background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.3); color: var(--gold); }
+
+    /* ── EMPTY STATE ── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 0;
+      color: var(--muted);
+    }
+
+    .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state p { font-size: 14px; }
+
+    /* ── FLEX UTILS ── */
+    .flex { display: flex; }
+    .flex-between { display: flex; justify-content: space-between; align-items: center; }
+    .gap-8 { gap: 8px; }
+    .gap-12 { gap: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mt-24 { margin-top: 24px; }
+
+    /* ── BACK BTN ── */
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      cursor: pointer;
+      margin-bottom: 24px;
+      transition: color 0.2s;
+    }
+    .back-btn:hover { color: var(--gold); }
+
+    /* ── STATS ROW ── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: 'Playfair Display', serif;
+      font-size: 28px;
+      color: var(--gold);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const API = "https://web-production-e8b4.up.railway.app";
+
+// ─── HELPERS ──────────────────────────────────────────────
+const api = {
+  get:  (path)       => fetch(`${API}${path}`).then(r => r.json()),
+  post: (path, body) => fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(r => r.json())
+};
+
+function statusBadge(status) {
+  const map = {
+    waiting_for_review:  ["badge-review",   "⏳", "Awaiting Review"],
+    approved:            ["badge-approved",  "✓",  "Approved"],
+    outline_approved:    ["badge-approved",  "✓",  "Outline Approved"],
+    chapters_in_progress:["badge-progress", "✍",  "In Progress"],
+    generating:          ["badge-generating","⚡", "Generating"],
+    needs_revision:      ["badge-danger",   "↩",  "Needs Revision"],
+    waiting_for_input:   ["badge-default",  "○",  "Draft"],
+  };
+  const [cls, icon, label] = map[status] || ["badge-default", "○", status];
+  return <span className={`badge ${cls}`}>{icon} {label}</span>;
+}
+
+// ─── APP ──────────────────────────────────────────────────
+function App() {
+  const [page, setPage]       = React.useState("books");
+  const [bookId, setBookId]   = React.useState(null);
+  const [chapterId, setChapterId] = React.useState(null);
+
+  const go = (p, bid=null, cid=null) => {
+    setPage(p); setBookId(bid); setChapterId(cid);
+  };
+
+  return (
+    <div style={{display:"flex", minHeight:"100vh"}}>
+      <Sidebar page={page} go={go} />
+      <main className="main">
+        {page === "books"   && <BooksPage go={go} />}
+        {page === "create"  && <CreatePage go={go} />}
+        {page === "book"    && <BookPage bookId={bookId} go={go} />}
+        {page === "chapter" && <ChapterPage chapterId={chapterId} bookId={bookId} go={go} />}
+      </main>
+    </div>
+  );
+}
+
+// ─── SIDEBAR ──────────────────────────────────────────────
+function Sidebar({ page, go }) {
+  return (
+    <nav className="sidebar">
+      <div className="sidebar-logo">
+        <h1>AutoBook</h1>
+        <p>AI Publishing System</p>
+      </div>
+      <div className="sidebar-nav">
+        <div className="nav-label">Navigation</div>
+        {[
+          { id:"books",  icon:"📚", label:"All Books"    },
+          { id:"create", icon:"✍",  label:"New Book"     },
+        ].map(n => (
+          <div key={n.id}
+            className={`nav-item ${page===n.id||page==="book"&&n.id==="books" ? "active":""}`}
+            onClick={() => go(n.id)}>
+            <span className="icon">{n.icon}</span>
+            {n.label}
+          </div>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+// ─── BOOKS PAGE ───────────────────────────────────────────
+function BooksPage({ go }) {
+  const [books, setBooks]     = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    api.get("/books")
+      .then(d => setBooks(d.books || []))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <Loader msg="Loading books..." />;
+
+  return (
+    <>
+      <div className="flex-between page-header">
+        <div>
+          <h2>Your Books</h2>
+          <p>{books.length} book{books.length!==1?"s":""} in your library</p>
+        </div>
+        <button className="btn btn-gold" onClick={() => go("create")}>
+          ✍ New Book
+        </button>
+      </div>
+
+      {books.length === 0
+        ? <div className="empty-state">
+            <div className="icon">📖</div>
+            <p>No books yet. Create your first one!</p>
+            <button className="btn btn-gold mt-16" onClick={() => go("create")}>
+              Create Book
+            </button>
+          </div>
+        : <div className="book-grid">
+            {books.map(b => (
+              <div key={b.id} className="book-card" onClick={() => go("book", b.id)}>
+                <div className="book-title">{b.title}</div>
+                <div className="book-notes">{b.notes}</div>
+                {statusBadge(b.status)}
+              </div>
+            ))}
+          </div>
+      }
+    </>
+  );
+}
+
+// ─── CREATE PAGE ──────────────────────────────────────────
+function CreatePage({ go }) {
+  const [title, setTitle]     = React.useState("");
+  const [notes, setNotes]     = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+  const [msg, setMsg]         = React.useState(null);
+
+  const create = async () => {
+    if (!title.trim() || !notes.trim()) return setMsg({t:"error", m:"Please fill in both fields."});
+    setLoading(true); setMsg({t:"info", m:"⚡ Generating outline... this may take 20–40 seconds."});
+    const res = await api.post("/books/create", { title, notes });
+    setLoading(false);
+    if (res.book_id) go("book", res.book_id);
+    else setMsg({t:"error", m: res.detail || "Something went wrong."});
+  };
+
+  return (
+    <>
+      <div className="page-header">
+        <h2>Create New Book</h2>
+        <p>Enter your title and notes — AI will generate a full outline</p>
+      </div>
+
+      <div className="card" style={{maxWidth:640}}>
+        {msg && <div className={`alert alert-${msg.t}`}>{msg.m}</div>}
+
+        <div className="form-group">
+          <label className="form-label">Book Title</label>
+          <input className="form-input" placeholder="e.g. The Lost City"
+            value={title} onChange={e => setTitle(e.target.value)} />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Author Notes</label>
+          <textarea className="form-textarea"
+            placeholder="Describe your book idea, genre, characters, setting..."
+            value={notes} onChange={e => setNotes(e.target.value)} />
+        </div>
+
+        <button className="btn btn-gold" onClick={create} disabled={loading}>
+          {loading ? "⚡ Generating..." : "✍ Generate Outline"}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ─── BOOK PAGE ────────────────────────────────────────────
+function BookPage({ bookId, go }) {
+  const [data, setData]         = React.useState(null);
+  const [chapters, setChapters] = React.useState([]);
+  const [loading, setLoading]   = React.useState(true);
+  const [genLoading, setGenLoading] = React.useState(false);
+  const [fbLoading, setFbLoading]   = React.useState(false);
+  const [revNotes, setRevNotes] = React.useState("");
+  const [showRev, setShowRev]   = React.useState(false);
+  const [msg, setMsg]           = React.useState(null);
+
+  const reload = () => {
+    setLoading(true);
+    Promise.all([
+      api.get(`/books/${bookId}`),
+      api.get(`/books/${bookId}/chapters`)
+    ]).then(([bd, cd]) => {
+      setData(bd);
+      setChapters(cd.chapters || []);
+    }).finally(() => setLoading(false));
+  };
+
+  React.useEffect(() => { reload(); }, [bookId]);
+
+  const outlineFeedback = async (status) => {
+    setFbLoading(true); setMsg(null);
+    const res = await api.post(`/books/${bookId}/feedback`, { status, editor_notes: revNotes });
+    setMsg(res.message ? {t:"success", m:res.message} : {t:"error", m:res.detail});
+    setShowRev(false); setRevNotes(""); reload(); setFbLoading(false);
+  };
+
+  const generateChapter = async () => {
+    setGenLoading(true);
+    setMsg({t:"info", m:"⚡ Generating next chapter... please wait 30–60 seconds."});
+    const res = await api.post(`/books/${bookId}/generate-chapter`, {});
+    setGenLoading(false);
+    if (res.chapter_id) {
+      setMsg({t:"success", m:`✅ ${res.message}`});
+      reload();
+    } else {
+      setMsg({t:"error", m: res.detail || "Failed to generate chapter."});
+    }
+  };
+
+  if (loading) return <Loader msg="Loading book..." />;
+  if (!data)   return <div className="alert alert-error">Book not found.</div>;
+
+  const book    = data.book;
+  const outline = data.outline;
+  const approved = chapters.filter(c => c.status === "approved").length;
+  const pending  = chapters.find(c => c.status === "waiting_for_review");
+  const canGenerate = ["outline_approved","chapters_in_progress"].includes(book.status) && !pending;
+
+  return (
+    <>
+      <div className="back-btn" onClick={() => go("books")}>← Back to Books</div>
+
+      {msg && <div className={`alert alert-${msg.t}`}>{msg.m}</div>}
+
+      {/* Header */}
+      <div className="flex-between page-header">
+        <div>
+          <h2>{book.title}</h2>
+          <div className="flex gap-8 mt-16" style={{alignItems:"center"}}>
+            {statusBadge(book.status)}
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="stats-row">
+        <div className="stat-card">
+          <div className="stat-value">{chapters.length}</div>
+          <div className="stat-label">Chapters Generated</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{approved}</div>
+          <div className="stat-label">Chapters Approved</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{chapters.length > 0 ? Math.round(approved/chapters.length*100) : 0}%</div>
+          <div className="stat-label">Progress</div>
+        </div>
+      </div>
+
+      {chapters.length > 0 && (
+        <div style={{marginBottom:28}}>
+          <div className="progress-wrap">
+            <div className="progress-fill" style={{width:`${chapters.length>0?approved/chapters.length*100:0}%`}} />
+          </div>
+        </div>
+      )}
+
+      {/* Outline Section */}
+      {outline && (
+        <div className="card">
+          <div className="flex-between" style={{marginBottom:16}}>
+            <div className="card-title">📋 Book Outline</div>
+            {statusBadge(outline.status)}
+          </div>
+
+          <div className="content-box">{outline.content}</div>
+
+          {outline.status === "waiting_for_review" && (
+            <div className="mt-24">
+              <div className="flex gap-8">
+                <button className="btn btn-success" onClick={() => outlineFeedback("approved")} disabled={fbLoading}>
+                  ✓ Approve Outline
+                </button>
+                <button className="btn btn-ghost" onClick={() => setShowRev(!showRev)} disabled={fbLoading}>
+                  ↩ Request Revision
+                </button>
+              </div>
+
+              {showRev && (
+                <div className="mt-16">
+                  <textarea className="form-textarea"
+                    placeholder="Describe what needs to change in the outline..."
+                    value={revNotes} onChange={e => setRevNotes(e.target.value)} />
+                  <button className="btn btn-danger mt-16"
+                    onClick={() => outlineFeedback("needs_revision")} disabled={fbLoading}>
+                    Send Revision Request
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Chapters Section */}
+      {(book.status === "outline_approved" || book.status === "chapters_in_progress") && (
+        <div className="card">
+          <div className="flex-between" style={{marginBottom:16}}>
+            <div className="card-title">📖 Chapters</div>
+            <button className="btn btn-gold btn-sm" onClick={generateChapter}
+              disabled={genLoading || !canGenerate}>
+              {genLoading ? "⚡ Generating..." : pending ? "⏳ Awaiting Review" : "+ Generate Next Chapter"}
+            </button>
+          </div>
+
+          {chapters.length === 0
+            ? <div className="empty-state" style={{padding:"32px 0"}}>
+                <p>No chapters yet. Click "Generate Next Chapter" to begin!</p>
+              </div>
+            : chapters.map(ch => (
+                <div key={ch.id} className="chapter-item"
+                  onClick={() => go("chapter", bookId, ch.id)}>
+                  <div className="flex" style={{alignItems:"center"}}>
+                    <span className="chapter-num">Chapter {ch.chapter_number}</span>
+                    {statusBadge(ch.status)}
+                  </div>
+                  <span style={{fontSize:12, color:"var(--muted)"}}>View →</span>
+                </div>
+              ))
+          }
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── CHAPTER PAGE ─────────────────────────────────────────
+function ChapterPage({ chapterId, bookId, go }) {
+  const [chapter, setChapter] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [fbLoading, setFbLoading] = React.useState(false);
+  const [revNotes, setRevNotes]   = React.useState("");
+  const [showRev, setShowRev]     = React.useState(false);
+  const [msg, setMsg]             = React.useState(null);
+
+  React.useEffect(() => {
+    api.get(`/chapters/${chapterId}`)
+      .then(d => setChapter(d.chapter))
+      .finally(() => setLoading(false));
+  }, [chapterId]);
+
+  const feedback = async (status) => {
+    setFbLoading(true); setMsg(null);
+    const res = await api.post(`/chapters/${chapterId}/feedback`, { status, editor_notes: revNotes });
+    setFbLoading(false);
+    if (res.status) {
+      setMsg({t:"success", m: res.message});
+      setChapter(prev => ({...prev, status: res.status}));
+      if (status === "approved") setTimeout(() => go("book", bookId), 1500);
+    } else {
+      setMsg({t:"error", m: res.detail || "Something went wrong."});
+    }
+  };
+
+  if (loading)  return <Loader msg="Loading chapter..." />;
+  if (!chapter) return <div className="alert alert-error">Chapter not found.</div>;
+
+  return (
+    <>
+      <div className="back-btn" onClick={() => go("book", bookId)}>← Back to Book</div>
+
+      {msg && <div className={`alert alert-${msg.t}`}>{msg.m}</div>}
+
+      <div className="flex-between page-header">
+        <div>
+          <h2>Chapter {chapter.chapter_number}</h2>
+          <div className="mt-16">{statusBadge(chapter.status)}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="content-box" style={{maxHeight:600}}>
+          {chapter.content}
+        </div>
+      </div>
+
+      {chapter.status === "waiting_for_review" && (
+        <div className="card">
+          <div className="card-title">Editor Review</div>
+          <div className="flex gap-8">
+            <button className="btn btn-success" onClick={() => feedback("approved")} disabled={fbLoading}>
+              ✓ Approve Chapter
+            </button>
+            <button className="btn btn-ghost" onClick={() => setShowRev(!showRev)} disabled={fbLoading}>
+              ↩ Request Revision
+            </button>
+          </div>
+
+          {showRev && (
+            <div className="mt-16">
+              <textarea className="form-textarea"
+                placeholder="What needs to change in this chapter?"
+                value={revNotes} onChange={e => setRevNotes(e.target.value)} />
+              <button className="btn btn-danger mt-16"
+                onClick={() => feedback("needs_revision")} disabled={fbLoading || !revNotes.trim()}>
+                Send Revision Request
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {chapter.status === "approved" && chapter.summary && (
+        <div className="card">
+          <div className="card-title">📝 Chapter Summary (saved for AI context)</div>
+          <div className="content-box" style={{maxHeight:150}}>{chapter.summary}</div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── LOADER ───────────────────────────────────────────────
+function Loader({ msg }) {
+  return (
+    <div className="loading-wrap">
+      <div className="spinner"></div>
+      <div className="loading-msg">{msg || "Loading..."}</div>
+    </div>
+  );
+}
+
+// ─── RENDER ───────────────────────────────────────────────
+ReactDOM.render(<App />, document.getElementById("root"));
+</script>
+</body>
+</html>
