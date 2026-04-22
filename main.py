@@ -69,7 +69,7 @@ Format it cleanly and professionally."""
 
     logger.info(f"🤖 Calling DeepSeek for outline: {title}")
     response = deepseek.chat.completions.create(
-        model="mistralai/mistral-7b-instruct:free",
+        model="deepseek/deepseek-r1:free",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=2000
     )
