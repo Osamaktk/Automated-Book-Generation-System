@@ -23,15 +23,19 @@ except Exception as e:
     logger.error(f"❌ Supabase connection failed: {e}")
     raise
 
-# DeepSeek client
+# OpenRouter client (OpenAI-compatible)
 try:
     deepseek = OpenAI(
-        api_key=os.environ["DEEPSEEK_API_KEY"],
-        base_url="https://api.deepseek.com"
+        api_key=os.environ["OPENROUTER_API_KEY"],
+        base_url="https://openrouter.ai/api/v1",
+        default_headers={
+            "HTTP-Referer": "https://autobook.railway.app",
+            "X-Title": "AutoBook"
+        }
     )
-    logger.info("✅ DeepSeek connected")
+    logger.info("✅ OpenRouter connected")
 except Exception as e:
-    logger.error(f"❌ DeepSeek connection failed: {e}")
+    logger.error(f"❌ OpenRouter connection failed: {e}")
     raise
 
 # ─── REQUEST MODELS ───────────────────────────────────────
@@ -65,7 +69,7 @@ Format it cleanly and professionally."""
 
     logger.info(f"🤖 Calling DeepSeek for outline: {title}")
     response = deepseek.chat.completions.create(
-        model="deepseek-chat",
+        model="mistralai/mistral-7b-instruct:free",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=2000
     )
