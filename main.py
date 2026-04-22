@@ -1,24 +1,38 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import asyncio
 import os
+import logging
 from supabase import create_client
 from openai import OpenAI
+
+# ─── LOGGING SETUP ────────────────────────────────────────
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ─── SETUP ────────────────────────────────────────────────
 app = FastAPI(title="AutoBook API")
 
 # Supabase client
-supabase = create_client(
-    os.environ["SUPABASE_URL"],
-    os.environ["SUPABASE_KEY"]
-)
+try:
+    supabase = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_KEY"]
+    )
+    logger.info("✅ Supabase connected")
+except Exception as e:
+    logger.error(f"❌ Supabase connection failed: {e}")
+    raise
 
-# DeepSeek client (uses OpenAI-compatible API)
-deepseek = OpenAI(
-    api_key=os.environ["DEEPSEEK_API_KEY"],
-    base_url="https://api.deepseek.com"
-)
+# DeepSeek client
+try:
+    deepseek = OpenAI(
+        api_key=os.environ["DEEPSEEK_API_KEY"],
+        base_url="https://api.deepseek.com"
+    )
+    logger.info("✅ DeepSeek connected")
+except Exception as e:
+    logger.error(f"❌ DeepSeek connection failed: {e}")
+    raise
 
 # ─── REQUEST MODELS ───────────────────────────────────────
 class BookInput(BaseModel):
@@ -26,13 +40,11 @@ class BookInput(BaseModel):
     notes: str
 
 class EditorFeedback(BaseModel):
-    status: str        # "approved" or "needs_revision"
+    status: str
     editor_notes: str = ""
 
 # ─── HELPER: CALL DEEPSEEK ────────────────────────────────
 def generate_outline(title: str, notes: str, editor_notes: str = "") -> str:
-    """Call DeepSeek to generate a book outline."""
-
     revision_text = ""
     if editor_notes:
         revision_text = f"\n\nEDITOR FEEDBACK (please apply this):\n{editor_notes}"
@@ -51,163 +63,165 @@ Your outline must include:
 
 Format it cleanly and professionally."""
 
+    logger.info(f"🤖 Calling DeepSeek for outline: {title}")
     response = deepseek.chat.completions.create(
         model="deepseek-chat",
         messages=[{"role": "user", "content": prompt}],
         max_tokens=2000
     )
-
+    logger.info("✅ DeepSeek response received")
     return response.choices[0].message.content
 
 # ─── ROUTE 1: CREATE BOOK + GENERATE OUTLINE ──────────────
 @app.post("/books/create")
 async def create_book(input: BookInput):
-    """
-    Step 1: Takes title + notes, saves book to DB,
-    generates outline, saves outline with status = waiting_for_review
-    """
+    try:
+        logger.info(f"📖 Creating book: {input.title}")
 
-    # 1. Save book to Supabase
-    book_result = supabase.table("books").insert({
-        "title": input.title,
-        "notes": input.notes,
-        "status": "generating"
-    }).execute()
+        # 1. Save book to Supabase
+        book_result = supabase.table("books").insert({
+            "title": input.title,
+            "notes": input.notes,
+            "status": "generating"
+        }).execute()
+        logger.info(f"✅ Book saved to DB: {book_result.data}")
 
-    book = book_result.data[0]
-    book_id = book["id"]
+        book = book_result.data[0]
+        book_id = book["id"]
 
-    # 2. Generate outline using DeepSeek
-    outline_content = generate_outline(input.title, input.notes)
+        # 2. Generate outline
+        outline_content = generate_outline(input.title, input.notes)
 
-    # 3. Save outline to Supabase
-    outline_result = supabase.table("outlines").insert({
-        "book_id": book_id,
-        "content": outline_content,
-        "status": "waiting_for_review"
-    }).execute()
+        # 3. Save outline
+        outline_result = supabase.table("outlines").insert({
+            "book_id": book_id,
+            "content": outline_content,
+            "status": "waiting_for_review"
+        }).execute()
+        logger.info(f"✅ Outline saved to DB")
 
-    outline = outline_result.data[0]
+        outline = outline_result.data[0]
 
-    # 4. Update book status
-    supabase.table("books").update({
-        "status": "waiting_for_review"
-    }).eq("id", book_id).execute()
+        # 4. Update book status
+        supabase.table("books").update({
+            "status": "waiting_for_review"
+        }).eq("id", book_id).execute()
 
-    return {
-        "message": "Book created and outline generated!",
-        "book_id": book_id,
-        "outline_id": outline["id"],
-        "outline": outline_content,
-        "status": "waiting_for_review",
-        "next_step": f"Review the outline and call /books/{book_id}/feedback"
-    }
+        return {
+            "message": "Book created and outline generated!",
+            "book_id": book_id,
+            "outline_id": outline["id"],
+            "outline": outline_content,
+            "status": "waiting_for_review",
+            "next_step": f"Review the outline and call /books/{book_id}/feedback"
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Error in create_book: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ─── ROUTE 2: GET BOOK STATUS ─────────────────────────────
 @app.get("/books/{book_id}")
 async def get_book(book_id: str):
-    """Get current status and outline of a book."""
+    try:
+        book = supabase.table("books").select("*").eq("id", book_id).execute()
+        if not book.data:
+            raise HTTPException(status_code=404, detail="Book not found")
 
-    book = supabase.table("books").select("*").eq("id", book_id).execute()
-    if not book.data:
-        raise HTTPException(status_code=404, detail="Book not found")
+        outline = supabase.table("outlines").select("*").eq("book_id", book_id)\
+            .order("created_at", desc=True).limit(1).execute()
 
-    outline = supabase.table("outlines").select("*").eq("book_id", book_id)\
-        .order("created_at", desc=True).limit(1).execute()
+        return {
+            "book": book.data[0],
+            "outline": outline.data[0] if outline.data else None
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error in get_book: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return {
-        "book": book.data[0],
-        "outline": outline.data[0] if outline.data else None
-    }
-
-# ─── ROUTE 3: EDITOR SUBMITS FEEDBACK ─────────────────────
+# ─── ROUTE 3: EDITOR FEEDBACK ─────────────────────────────
 @app.post("/books/{book_id}/feedback")
 async def submit_feedback(book_id: str, feedback: EditorFeedback):
-    """
-    Editor approves or requests revision.
-    - If approved     → book moves to chapter generation stage
-    - If needs_revision → regenerate outline with editor notes
-    """
+    try:
+        if feedback.status not in ["approved", "needs_revision"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Status must be 'approved' or 'needs_revision'"
+            )
 
-    if feedback.status not in ["approved", "needs_revision"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Status must be 'approved' or 'needs_revision'"
-        )
+        outline_result = supabase.table("outlines").select("*")\
+            .eq("book_id", book_id).order("created_at", desc=True).limit(1).execute()
 
-    # Get latest outline
-    outline_result = supabase.table("outlines").select("*")\
-        .eq("book_id", book_id).order("created_at", desc=True).limit(1).execute()
+        if not outline_result.data:
+            raise HTTPException(status_code=404, detail="Outline not found")
 
-    if not outline_result.data:
-        raise HTTPException(status_code=404, detail="Outline not found")
+        outline = outline_result.data[0]
+        book_result = supabase.table("books").select("*").eq("id", book_id).execute()
+        book = book_result.data[0]
 
-    outline = outline_result.data[0]
+        if feedback.status == "approved":
+            supabase.table("outlines").update({
+                "status": "approved",
+                "editor_notes": feedback.editor_notes
+            }).eq("id", outline["id"]).execute()
 
-    # Get book
-    book_result = supabase.table("books").select("*").eq("id", book_id).execute()
-    book = book_result.data[0]
+            supabase.table("books").update({
+                "status": "outline_approved"
+            }).eq("id", book_id).execute()
 
-    if feedback.status == "approved":
-        # Mark outline as approved
-        supabase.table("outlines").update({
-            "status": "approved",
-            "editor_notes": feedback.editor_notes
-        }).eq("id", outline["id"]).execute()
+            return {
+                "message": "✅ Outline approved! Ready for chapter generation.",
+                "book_id": book_id,
+                "status": "outline_approved"
+            }
 
-        # Update book status
-        supabase.table("books").update({
-            "status": "outline_approved"
-        }).eq("id", book_id).execute()
+        elif feedback.status == "needs_revision":
+            supabase.table("outlines").update({
+                "status": "needs_revision",
+                "editor_notes": feedback.editor_notes
+            }).eq("id", outline["id"]).execute()
 
-        return {
-            "message": "✅ Outline approved! Ready for chapter generation.",
-            "book_id": book_id,
-            "status": "outline_approved",
-            "next_step": "Milestone 2 — Chapter generation will begin soon!"
-        }
+            new_outline_content = generate_outline(
+                title=book["title"],
+                notes=book["notes"],
+                editor_notes=feedback.editor_notes
+            )
 
-    elif feedback.status == "needs_revision":
-        # Update old outline status
-        supabase.table("outlines").update({
-            "status": "needs_revision",
-            "editor_notes": feedback.editor_notes
-        }).eq("id", outline["id"]).execute()
+            new_outline = supabase.table("outlines").insert({
+                "book_id": book_id,
+                "content": new_outline_content,
+                "status": "waiting_for_review"
+            }).execute()
 
-        # Regenerate outline with editor notes
-        new_outline_content = generate_outline(
-            title=book["title"],
-            notes=book["notes"],
-            editor_notes=feedback.editor_notes
-        )
+            supabase.table("books").update({
+                "status": "waiting_for_review"
+            }).eq("id", book_id).execute()
 
-        # Save new outline
-        new_outline = supabase.table("outlines").insert({
-            "book_id": book_id,
-            "content": new_outline_content,
-            "status": "waiting_for_review"
-        }).execute()
+            return {
+                "message": "🔄 Outline regenerated with your feedback!",
+                "book_id": book_id,
+                "outline_id": new_outline.data[0]["id"],
+                "new_outline": new_outline_content,
+                "status": "waiting_for_review"
+            }
 
-        # Update book status
-        supabase.table("books").update({
-            "status": "waiting_for_review"
-        }).eq("id", book_id).execute()
-
-        return {
-            "message": "🔄 Outline regenerated with your feedback!",
-            "book_id": book_id,
-            "outline_id": new_outline.data[0]["id"],
-            "new_outline": new_outline_content,
-            "status": "waiting_for_review",
-            "next_step": f"Review the new outline and call /books/{book_id}/feedback again"
-        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error in submit_feedback: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ─── ROUTE 4: LIST ALL BOOKS ──────────────────────────────
 @app.get("/books")
 async def list_books():
-    """List all books and their statuses."""
-    books = supabase.table("books").select("*").order("created_at", desc=True).execute()
-    return {"books": books.data}
+    try:
+        books = supabase.table("books").select("*").order("created_at", desc=True).execute()
+        return {"books": books.data}
+    except Exception as e:
+        logger.error(f"❌ Error in list_books: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ─── HEALTH CHECK ─────────────────────────────────────────
 @app.get("/")
