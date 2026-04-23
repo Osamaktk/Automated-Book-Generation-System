@@ -33,8 +33,10 @@ except Exception as e:
     raise
 
 # OpenRouter – using a reliable free model
-# Available free models: https://openrouter.dev/models
-MODEL_NAME = "mistralai/mistral-7b-instruct:free"  # ✅ corrected model ID
+# Primary model: Mistral Small 3.1 (24B) - fast, capable, and confirmed working.
+# Fallback model: If the primary fails, OpenRouter will auto-select any working free model.
+MODEL_NAME = "mistralai/mistral-small-3.1-24b-instruct:free"
+FALLBACK_MODEL = "openrouter/free"
 
 try:
     client = OpenAI(
@@ -42,7 +44,7 @@ try:
         base_url="https://openrouter.ai/api/v1",
         default_headers={"HTTP-Referer": "https://autobook.railway.app", "X-Title": "AutoBook"}
     )
-    logger.info(f"✅ OpenRouter connected, using model: {MODEL_NAME}")
+    logger.info(f"✅ OpenRouter connected, primary model: {MODEL_NAME}")
 except Exception as e:
     logger.error(f"❌ OpenRouter: {e}")
     raise
@@ -58,17 +60,32 @@ class EditorFeedback(BaseModel):
 
 # ─── HELPER: CALL AI (non-streaming, for summaries) ───────
 def call_ai(prompt: str, max_tokens: int = 2000) -> str:
-    response = client.chat.completions.create(
-        model=MODEL_NAME,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        timeout=90
-    )
-    return response.choices[0].message.content
+    """Call AI with fallback model handling."""
+    try:
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            timeout=90
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.warning(f"Primary model {MODEL_NAME} failed: {e}. Falling back to {FALLBACK_MODEL}.")
+        try:
+            response = client.chat.completions.create(
+                model=FALLBACK_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                timeout=90
+            )
+            return response.choices[0].message.content
+        except Exception as fallback_e:
+            logger.error(f"Fallback model also failed: {fallback_e}")
+            raise fallback_e
 
 # ─── HELPER: STREAM AI (async) ────────────────────────────
 async def stream_ai_async(prompt: str, max_tokens: int = 2000):
-    """Async generator that streams text chunks from OpenRouter."""
+    """Async generator that streams text chunks, with fallback support."""
     loop = asyncio.get_event_loop()
     queue = asyncio.Queue()
 
@@ -86,11 +103,24 @@ async def stream_ai_async(prompt: str, max_tokens: int = 2000):
                 if hasattr(delta, "content") and delta.content:
                     loop.call_soon_threadsafe(queue.put_nowait, delta.content)
         except Exception as e:
-            loop.call_soon_threadsafe(queue.put_nowait, f"__ERROR__:{e}")
+            logger.warning(f"Primary model stream failed: {e}. Attempting fallback.")
+            try:
+                stream = client.chat.completions.create(
+                    model=FALLBACK_MODEL,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    stream=True,
+                    timeout=90
+                )
+                for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if hasattr(delta, "content") and delta.content:
+                        loop.call_soon_threadsafe(queue.put_nowait, delta.content)
+            except Exception as fallback_e:
+                loop.call_soon_threadsafe(queue.put_nowait, f"__ERROR__:{fallback_e}")
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)
 
-    # Run blocking stream in thread pool
     asyncio.get_event_loop().run_in_executor(None, run_stream)
 
     while True:
@@ -157,13 +187,8 @@ Write only the summary:"""
 # ─── STREAM OUTLINE GENERATION ────────────────────────────
 @app.post("/books/create-stream")
 async def create_book_stream(input: BookInput):
-    """
-    Creates a book and streams the outline generation in real time.
-    Returns Server-Sent Events (SSE).
-    """
     async def generate():
         try:
-            # 1. Save book to DB
             book_result = supabase.table("books").insert({
                 "title": input.title,
                 "notes": input.notes,
@@ -173,7 +198,6 @@ async def create_book_stream(input: BookInput):
 
             yield f"data: {json.dumps({'type': 'book_id', 'book_id': book_id})}\n\n"
 
-            # 2. Stream outline from AI
             prompt = outline_prompt(input.title, input.notes)
             full_content = ""
 
@@ -181,7 +205,6 @@ async def create_book_stream(input: BookInput):
                 full_content += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
 
-            # 3. Save outline to DB
             outline_result = supabase.table("outlines").insert({
                 "book_id": book_id,
                 "content": full_content,
@@ -203,12 +226,8 @@ async def create_book_stream(input: BookInput):
 # ─── STREAM CHAPTER GENERATION ────────────────────────────
 @app.post("/books/{book_id}/generate-chapter-stream")
 async def generate_chapter_stream(book_id: str):
-    """
-    Generates the next chapter and streams it in real time.
-    """
     async def generate():
         try:
-            # 1. Get book
             book_result = supabase.table("books").select("*").eq("id", book_id).execute()
             if not book_result.data:
                 yield f"data: {json.dumps({'type': 'error', 'message': 'Book not found'})}\n\n"
@@ -219,24 +238,20 @@ async def generate_chapter_stream(book_id: str):
                 yield f"data: {json.dumps({'type': 'error', 'message': f'Outline must be approved first. Status: {book["status"]}'})}\n\n"
                 return
 
-            # 2. Get approved outline
             outline_result = supabase.table("outlines").select("*").eq("book_id", book_id).eq("status", "approved").execute()
             if not outline_result.data:
                 yield f"data: {json.dumps({'type': 'error', 'message': 'No approved outline found'})}\n\n"
                 return
             outline = outline_result.data[0]
 
-            # 3. Block if chapter pending review
             pending = supabase.table("chapters").select("*").eq("book_id", book_id).eq("status", "waiting_for_review").execute()
             if pending.data:
                 yield f"data: {json.dumps({'type': 'error', 'message': f'Chapter {pending.data[0]["chapter_number"]} is waiting for review!'})}\n\n"
                 return
 
-            # 4. Find next chapter number
             approved_chapters = supabase.table("chapters").select("*").eq("book_id", book_id).eq("status", "approved").order("chapter_number").execute()
             next_num = len(approved_chapters.data) + 1
 
-            # 5. Extract chapter title from outline
             chapter_title = f"Chapter {next_num}"
             for line in outline["content"].split("\n"):
                 if f"Chapter {next_num}" in line or f"**{next_num}." in line:
@@ -245,25 +260,20 @@ async def generate_chapter_stream(book_id: str):
                         chapter_title = clean
                         break
 
-            # 6. Previous summaries
             previous_summaries = [
                 {"chapter_number": c["chapter_number"], "summary": c["summary"]}
                 for c in approved_chapters.data if c.get("summary")
             ]
 
-            # Send chapter info
             yield f"data: {json.dumps({'type': 'chapter_info', 'chapter_number': next_num, 'chapter_title': chapter_title})}\n\n"
 
-            # 7. Stream chapter content
             prompt = chapter_prompt(book["title"], outline["content"], next_num, chapter_title, previous_summaries)
             full_content = ""
 
-            # ✅ FIX: use stream_ai_async instead of undefined stream_ai
             async for chunk in stream_ai_async(prompt, max_tokens=3000):
                 full_content += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
 
-            # 8. Save chapter to DB
             chapter_result = supabase.table("chapters").insert({
                 "book_id": book_id,
                 "chapter_number": next_num,
