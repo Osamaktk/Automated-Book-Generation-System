@@ -47,17 +47,37 @@ except Exception as e:
     logger.error(f"❌ OpenRouter: {e}")
     raise
 
-# ─── MODEL POOL ─────────────────────────────────────────
-import os
+# ─── AI MODEL REGISTRY (PRODUCTION ROUTER) ─────────────────
 
-AI_MODELS = [
-    "mistralai/mistral-7b-instruct",
-    "mistralai/mistral-7b-instruct-v0.2",
-    "meta-llama/llama-3-8b-instruct",
-    "meta-llama/llama-3.1-8b-instruct",
-    "google/gemma-7b-it",
-    "nousresearch/hermes-2-pro-llama-3-8b",
-]
+MODEL_REGISTRY = {
+    "fast": [
+        "google/gemma-7b-it",
+        "mistralai/mistral-7b-instruct",
+    ],
+
+    "balanced": [
+        "mistralai/mistral-7b-instruct-v0.2",
+        "meta-llama/llama-3-8b-instruct",
+    ],
+
+    "strong": [
+        "meta-llama/llama-3.1-8b-instruct",
+        "nousresearch/hermes-2-pro-llama-3-8b",
+    ]
+}
+
+AI_MODEL_OVERRIDE = os.environ.get("AI_MODEL")
+
+def route_task(prompt: str) -> str:
+    p = prompt.lower()
+
+    if any(word in p for word in ["summarize", "short", "extract"]):
+        return "fast"
+
+    if any(word in p for word in ["write", "chapter", "story", "book", "novel"]):
+        return "strong"
+
+    return "balanced"
 
 # Optional override (if you still want manual control)
 AI_MODEL = os.environ.get("AI_MODEL")
@@ -70,15 +90,28 @@ class EditorFeedback(BaseModel):
     status: str
     editor_notes: str = ""
 
-# ─── HELPER: CALL AI (blocking, for short tasks) ──────────
 def call_ai(prompt: str, max_tokens: int = 2000) -> str:
-    response = client.chat.completions.create(
-        model=AI_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        timeout=90
-    )
-    return response.choices[0].message.content
+    task = route_task(prompt)
+
+    models = MODEL_REGISTRY.get(task, MODEL_REGISTRY["balanced"])
+
+    last_error = None
+
+    for model in models:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                timeout=90
+            )
+            return response.choices[0].message.content
+
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"Model failed: {model} -> {e}")
+
+    raise Exception(f"All models failed. Last error: {last_error}")
 
 # ─── HELPER: STREAM AI (async generator) ──────────────────
 async def stream_ai_async(prompt: str, max_tokens: int = 2000):
@@ -91,22 +124,35 @@ async def stream_ai_async(prompt: str, max_tokens: int = 2000):
     queue: asyncio.Queue = asyncio.Queue()
 
     def run_stream():
-        try:
-            stream = client.chat.completions.create(
-                model=AI_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                stream=True,
-                timeout=90
-            )
-            for chunk in stream:
-                delta = chunk.choices[0].delta
-                if hasattr(delta, "content") and delta.content:
-                    loop.call_soon_threadsafe(queue.put_nowait, delta.content)
-        except Exception as e:
-            loop.call_soon_threadsafe(queue.put_nowait, f"__ERROR__:{e}")
-        finally:
-            loop.call_soon_threadsafe(queue.put_nowait, None)   # sentinel
+        task = route_task(prompt)
+        models = MODEL_REGISTRY.get(task, MODEL_REGISTRY["balanced"])
+
+        last_error = None
+
+        for model in models:
+            try:
+                stream = client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=max_tokens,
+                    stream=True,
+                    timeout=90
+                )
+
+                for chunk in stream:
+                    delta = chunk.choices[0].delta
+                    if getattr(delta, "content", None):
+                        loop.call_soon_threadsafe(queue.put_nowait, delta.content)
+
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+                return
+
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"Streaming failed: {model} -> {e}")
+
+        loop.call_soon_threadsafe(queue.put_nowait, f"__ERROR__:{last_error}")
+        loop.call_soon_threadsafe(queue.put_nowait, None)
 
     # Submit blocking work to thread pool
     loop.run_in_executor(None, run_stream)
