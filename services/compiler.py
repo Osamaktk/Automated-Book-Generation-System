@@ -1,11 +1,13 @@
 import io
 import logging
 import re
+from datetime import datetime, UTC
 from xml.sax.saxutils import escape
 
 from docx import Document
+from docx.enum.section import WD_SECTION_START
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
@@ -26,6 +28,29 @@ def compile_to_docx(book: dict, outline: dict, chapters: list) -> bytes:
     """
     try:
         document = Document()
+        section = document.sections[0]
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+
+        normal_style = document.styles["Normal"]
+        normal_style.font.name = "Times New Roman"
+        normal_style.font.size = Pt(12)
+
+        generated_on = datetime.now(UTC).strftime("%B %d, %Y")
+        author_name = book.get("author") or "AutoBook"
+        approved_chapters = sorted(
+            [chapter for chapter in chapters if chapter.get("status") == "approved"],
+            key=lambda chapter: chapter["chapter_number"],
+        )
+        chapter_entries = [
+            (
+                chapter["chapter_number"],
+                extract_chapter_title(outline.get("content", ""), chapter["chapter_number"]),
+            )
+            for chapter in approved_chapters
+        ]
 
         title_paragraph = document.add_paragraph()
         title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -33,47 +58,95 @@ def compile_to_docx(book: dict, outline: dict, chapters: list) -> bytes:
         title_run.bold = True
         title_run.font.size = Pt(28)
 
+        subtitle_paragraph = document.add_paragraph()
+        subtitle_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        subtitle_run = subtitle_paragraph.add_run(f"By {author_name}")
+        subtitle_run.italic = True
+        subtitle_run.font.size = Pt(14)
+
+        date_paragraph = document.add_paragraph()
+        date_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        date_paragraph.add_run(f"Generated on {generated_on}").font.size = Pt(11)
+
+        cover_footer = section.footer.paragraphs[0]
+        cover_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        cover_footer.text = book["title"]
+
         document.add_page_break()
 
-        document.add_heading("Author Notes", level=1)
+        toc_heading = document.add_paragraph()
+        toc_heading.style = document.styles["Heading 1"]
+        toc_heading.add_run("Table of Contents")
+
+        for chapter_number, chapter_title in chapter_entries:
+            toc_entry = document.add_paragraph()
+            toc_entry.paragraph_format.left_indent = Inches(0.25)
+            toc_entry.paragraph_format.space_after = Pt(6)
+            toc_entry.add_run(f"Chapter {chapter_number} - {chapter_title}")
+
+        document.add_page_break()
+
+        notes_heading = document.add_paragraph()
+        notes_heading.style = document.styles["Heading 1"]
+        notes_heading.add_run("Author Notes")
         for paragraph in re.split(r"\n\s*\n", (book.get("notes") or "").strip()):
             if paragraph.strip():
-                document.add_paragraph(paragraph.strip())
+                note_paragraph = document.add_paragraph(paragraph.strip())
+                note_paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                note_paragraph.paragraph_format.first_line_indent = Inches(0.3)
+                note_paragraph.paragraph_format.space_after = Pt(10)
 
         document.add_page_break()
 
-        document.add_heading("Outline", level=1)
+        outline_heading = document.add_paragraph()
+        outline_heading.style = document.styles["Heading 1"]
+        outline_heading.add_run("Outline")
         for paragraph in re.split(r"\n\s*\n", (outline.get("content") or "").strip()):
             if paragraph.strip():
-                document.add_paragraph(paragraph.strip())
-
-        document.add_page_break()
-
-        approved_chapters = sorted(
-            [chapter for chapter in chapters if chapter.get("status") == "approved"],
-            key=lambda chapter: chapter["chapter_number"],
-        )
+                outline_paragraph = document.add_paragraph(paragraph.strip())
+                outline_paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                outline_paragraph.paragraph_format.first_line_indent = Inches(0.3)
+                outline_paragraph.paragraph_format.space_after = Pt(10)
 
         for index, chapter in enumerate(approved_chapters):
-            chapter_title = extract_chapter_title(
-                outline.get("content", ""), chapter["chapter_number"]
-            )
-            document.add_heading(
-                f"Chapter {chapter['chapter_number']} - {chapter_title}",
-                level=1,
+            document.add_section(WD_SECTION_START.NEW_PAGE)
+            current_section = document.sections[-1]
+            current_section.top_margin = Inches(1)
+            current_section.bottom_margin = Inches(1)
+            current_section.left_margin = Inches(1)
+            current_section.right_margin = Inches(1)
+
+            header = current_section.header.paragraphs[0]
+            header.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            header.text = book["title"]
+
+            footer = current_section.footer.paragraphs[0]
+            footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            footer.text = f"Chapter {chapter['chapter_number']}"
+
+            chapter_heading = document.add_paragraph()
+            chapter_heading.style = document.styles["Heading 1"]
+            chapter_heading.add_run(
+                f"Chapter {chapter_entries[index][0]} - {chapter_entries[index][1]}"
             )
 
             for paragraph in re.split(r"\n\s*\n", (chapter.get("content") or "").strip()):
                 if paragraph.strip():
-                    document.add_paragraph(paragraph.strip())
+                    body_paragraph = document.add_paragraph(paragraph.strip())
+                    body_paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    body_paragraph.paragraph_format.first_line_indent = Inches(0.3)
+                    body_paragraph.paragraph_format.line_spacing = 1.3
+                    body_paragraph.paragraph_format.space_after = Pt(10)
 
             if chapter.get("summary"):
                 summary_paragraph = document.add_paragraph()
-                summary_run = summary_paragraph.add_run(chapter["summary"].strip())
+                summary_paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                summary_paragraph.paragraph_format.space_before = Pt(8)
+                summary_paragraph.paragraph_format.space_after = Pt(8)
+                summary_run = summary_paragraph.add_run(
+                    f"Summary: {chapter['summary'].strip()}"
+                )
                 summary_run.italic = True
-
-            if index < len(approved_chapters) - 1:
-                document.add_page_break()
 
         output = io.BytesIO()
         document.save(output)
@@ -92,6 +165,21 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
     """
     try:
         output = io.BytesIO()
+
+        generated_on = datetime.now(UTC).strftime("%B %d, %Y")
+        author_name = book.get("author") or "AutoBook"
+        approved_chapters = sorted(
+            [chapter for chapter in chapters if chapter.get("status") == "approved"],
+            key=lambda chapter: chapter["chapter_number"],
+        )
+        chapter_entries = [
+            (
+                chapter["chapter_number"],
+                extract_chapter_title(outline.get("content", ""), chapter["chapter_number"]),
+            )
+            for chapter in approved_chapters
+        ]
+
         document = SimpleDocTemplate(
             output,
             pagesize=LETTER,
@@ -107,7 +195,17 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
             fontSize=28,
             leading=34,
             alignment=1,
-            spaceAfter=0,
+            spaceAfter=16,
+            fontName="Times-Bold",
+        )
+        subtitle_style = ParagraphStyle(
+            "BookSubtitle",
+            parent=styles["BodyText"],
+            fontSize=14,
+            leading=18,
+            alignment=1,
+            italic=True,
+            spaceAfter=8,
         )
         heading_style = ParagraphStyle(
             "SectionHeading",
@@ -115,13 +213,17 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
             fontSize=18,
             leading=22,
             spaceAfter=12,
+            fontName="Times-Bold",
         )
         body_style = ParagraphStyle(
             "BodyCopy",
             parent=styles["BodyText"],
             fontSize=12,
-            leading=16,
+            leading=17,
             spaceAfter=10,
+            fontName="Times-Roman",
+            alignment=4,
+            firstLineIndent=18,
         )
         summary_style = ParagraphStyle(
             "SummaryCopy",
@@ -130,14 +232,43 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
             leading=14,
             spaceAfter=10,
             italic=True,
+            leftIndent=18,
+            rightIndent=18,
+            fontName="Times-Italic",
+        )
+        toc_style = ParagraphStyle(
+            "TOCEntry",
+            parent=styles["BodyText"],
+            fontSize=12,
+            leading=16,
+            spaceAfter=8,
+            leftIndent=18,
+            fontName="Times-Roman",
         )
 
         story = [
-            Spacer(1, 2.5 * inch),
+            Spacer(1, 2.2 * inch),
             Paragraph(escape(book["title"]), title_style),
+            Paragraph(escape(f"By {author_name}"), subtitle_style),
+            Paragraph(escape(f"Generated on {generated_on}"), styles["BodyText"]),
             PageBreak(),
-            Paragraph("Author Notes", heading_style),
+            Paragraph("Table of Contents", heading_style),
         ]
+
+        for chapter_number, chapter_title in chapter_entries:
+            story.append(
+                Paragraph(
+                    escape(f"Chapter {chapter_number} - {chapter_title}"),
+                    toc_style,
+                )
+            )
+
+        story.extend(
+            [
+                PageBreak(),
+            Paragraph("Author Notes", heading_style),
+            ]
+        )
 
         for paragraph in re.split(r"\n\s*\n", (book.get("notes") or "").strip()):
             if paragraph.strip():
@@ -159,20 +290,21 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
                     )
                 )
 
-        story.append(PageBreak())
-
-        approved_chapters = sorted(
-            [chapter for chapter in chapters if chapter.get("status") == "approved"],
-            key=lambda chapter: chapter["chapter_number"],
-        )
+        def draw_page_chrome(canvas, doc):
+            if canvas.getPageNumber() > 1:
+                canvas.saveState()
+                canvas.setFont("Times-Roman", 9)
+                canvas.drawCentredString(LETTER[0] / 2.0, 0.6 * inch, book["title"])
+                canvas.drawRightString(LETTER[0] - inch, 0.6 * inch, str(canvas.getPageNumber()))
+                canvas.restoreState()
 
         for index, chapter in enumerate(approved_chapters):
-            chapter_title = extract_chapter_title(
-                outline.get("content", ""), chapter["chapter_number"]
-            )
+            story.append(PageBreak())
             story.append(
                 Paragraph(
-                    escape(f"Chapter {chapter['chapter_number']} - {chapter_title}"),
+                    escape(
+                        f"Chapter {chapter_entries[index][0]} - {chapter_entries[index][1]}"
+                    ),
                     heading_style,
                 )
             )
@@ -189,10 +321,11 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
             if chapter.get("summary"):
                 story.append(Paragraph(escape(chapter["summary"].strip()), summary_style))
 
-            if index < len(approved_chapters) - 1:
-                story.append(PageBreak())
-
-        document.build(story)
+        document.build(
+            story,
+            onFirstPage=draw_page_chrome,
+            onLaterPages=draw_page_chrome,
+        )
         return output.getvalue()
     except Exception as exc:
         logger.error("PDF compilation failed: %s", exc, exc_info=True)
