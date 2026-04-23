@@ -10,17 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ─── SETUP ────────────────────────────────────────────────
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(title="AutoBook API")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Supabase client
 try:
@@ -449,12 +439,13 @@ async def get_chapter(chapter_id: str):
 async def submit_chapter_feedback(chapter_id: str, feedback: EditorFeedback):
     """
     Editor approves or requests revision for a chapter.
-    - approved      → summarize chapter, save summary, ready for next chapter
+    - approved       → summarize chapter, save summary, ready for next chapter
+    - final_chapter  → approve AND mark book as chapters_complete (stops generation)
     - needs_revision → regenerate with editor notes
     """
     try:
-        if feedback.status not in ["approved", "needs_revision"]:
-            raise HTTPException(status_code=400, detail="Status must be 'approved' or 'needs_revision'")
+        if feedback.status not in ["approved", "needs_revision", "final_chapter"]:
+            raise HTTPException(status_code=400, detail="Status must be 'approved', 'final_chapter', or 'needs_revision'")
 
         chapter_result = supabase.table("chapters").select("*").eq("id", chapter_id).execute()
         if not chapter_result.data:
@@ -469,7 +460,7 @@ async def submit_chapter_feedback(chapter_id: str, feedback: EditorFeedback):
             .eq("book_id", book_id).eq("status", "approved").execute()
         outline = outline_result.data[0]
 
-        if feedback.status == "approved":
+        if feedback.status in ["approved", "final_chapter"]:
             # Summarize chapter for future context
             summary = summarize_chapter(
                 chapter_number=chapter["chapter_number"],
@@ -482,6 +473,19 @@ async def submit_chapter_feedback(chapter_id: str, feedback: EditorFeedback):
                 "summary": summary,
                 "editor_notes": feedback.editor_notes
             }).eq("id", chapter_id).execute()
+
+            # If editor marked this as the final chapter, lock the book
+            if feedback.status == "final_chapter":
+                supabase.table("books").update({
+                    "status": "chapters_complete"
+                }).eq("id", book_id).execute()
+                return {
+                    "message": f"📚 Chapter {chapter['chapter_number']} approved as FINAL chapter! Book is complete.",
+                    "chapter_number": chapter["chapter_number"],
+                    "summary_saved": summary,
+                    "status": "chapters_complete",
+                    "next_step": f"All chapters done! Now compile the book."
+                }
 
             return {
                 "message": f"✅ Chapter {chapter['chapter_number']} approved!",
