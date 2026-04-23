@@ -12,6 +12,7 @@ from database import (
 )
 from models import EditorFeedback
 from prompts import build_chapter_prompt, build_summary_prompt, extract_chapter_title
+from services.notifications import notify
 
 
 router = APIRouter(tags=["chapters"])
@@ -93,6 +94,11 @@ async def submit_chapter_feedback(chapter_id: str, feedback: EditorFeedback):
             )
             if feedback.status == "final_chapter":
                 update_book_status(chapter["book_id"], "chapters_complete")
+                notify(
+                    "book_complete",
+                    book["title"],
+                    "All chapters approved. Ready to compile.",
+                )
                 return {
                     "message": f"Chapter {chapter['chapter_number']} approved as FINAL chapter!",
                     "status": "chapters_complete",

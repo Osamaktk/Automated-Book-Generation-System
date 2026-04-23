@@ -51,3 +51,16 @@ POST /books/{book_id}/feedback
   "editor_notes": "Add more mystery elements and make chapter 3 about a chase scene."
 }
 ```
+
+## Configuration
+
+Optional notification settings:
+
+- `SMTP_HOST` - SMTP server hostname, e.g. `smtp.gmail.com`
+- `SMTP_PORT` - SMTP port, default `587`
+- `SMTP_USER` - sender address, e.g. `autobook@gmail.com`
+- `SMTP_PASSWORD` - SMTP or app password
+- `SMTP_TO` - recipient list, comma-separated
+- `TEAMS_WEBHOOK` - full Microsoft Teams webhook URL
+
+If any notification variable is missing, that channel is skipped silently.

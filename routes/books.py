@@ -1,5 +1,5 @@
 import json
-from urllib.parse import quote
+import re
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -21,6 +21,8 @@ from database import (
 )
 from models import BookInput, EditorFeedback
 from prompts import build_chapter_prompt, build_outline_prompt, extract_chapter_title
+from services.compiler import compile_to_docx, compile_to_pdf
+from services.notifications import notify
 
 
 router = APIRouter(prefix="/books", tags=["books"])
@@ -36,10 +38,6 @@ def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
         for chapter in approved_chapters
         if chapter.get("summary")
     ]
-
-
-def _build_download_url(content: str) -> str:
-    return f"data:text/plain;charset=utf-8,{quote(content)}"
 
 
 @router.post("/create-stream")
@@ -63,6 +61,7 @@ async def create_book_stream(input: BookInput):
                 content=full_content,
                 status="waiting_for_review",
             )
+            notify("outline_ready", book["title"], f"Book ID: {book_id}")
             update_book_status(book_id, "waiting_for_review")
 
             yield _serialize_event(
@@ -89,6 +88,7 @@ async def create_book_route(input: BookInput):
             content=outline_content,
             status="waiting_for_review",
         )
+        notify("outline_ready", book["title"], f"Book ID: {book['id']}")
         update_book_status(book["id"], "waiting_for_review")
         return {
             "message": "Book created!",
@@ -211,6 +211,7 @@ async def submit_outline_feedback(book_id: str, feedback: EditorFeedback):
             content=new_content,
             status="waiting_for_review",
         )
+        notify("outline_ready", book["title"], f"Book ID: {book_id}")
         update_book_status(book_id, "waiting_for_review")
         return {
             "message": "Outline regenerated!",
@@ -224,56 +225,90 @@ async def submit_outline_feedback(book_id: str, feedback: EditorFeedback):
         raise HTTPException(500, str(exc))
 
 
-@router.post("/{book_id}/compile")
-async def compile_book_route(book_id: str):
+@router.get("/{book_id}/compile")
+async def compile_book_route(book_id: str, format: str = "docx"):
     try:
+        if format not in {"docx", "pdf", "txt"}:
+            raise HTTPException(400, "Format must be one of: docx, pdf, txt")
+
         book = get_book(book_id)
         if not book:
             raise HTTPException(404, "Book not found")
 
+        outline = get_latest_outline(book_id)
+        if not outline:
+            raise HTTPException(404, "Outline not found")
+
         chapters = (
-            supabase.table("chapters")
-            .select("chapter_number, content, status")
-            .eq("book_id", book_id)
-            .order("chapter_number")
-            .execute()
-            .data
+            supabase.table("chapters").select("*").eq("book_id", book_id).execute().data
             or []
         )
-        if not chapters:
-            raise HTTPException(400, "No chapters found to compile")
+        approved_chapters = sorted(
+            [chapter for chapter in chapters if chapter["status"] == "approved"],
+            key=lambda chapter: chapter["chapter_number"],
+        )
+        if not approved_chapters:
+            raise HTTPException(400, "No approved chapters found to compile")
 
-        if any(chapter["status"] != "approved" for chapter in chapters):
-            raise HTTPException(400, "All chapters must be approved before compiling")
+        slug = (
+            re.sub(
+                r"-+",
+                "-",
+                re.sub(r"[^a-z0-9]+", "-", book["title"].lower()),
+            ).strip("-")
+            or "book"
+        )
+        headers = {
+            "Content-Disposition": f'attachment; filename="{slug}_{book_id[:8]}.{format}"'
+        }
 
-        outline = get_latest_outline(book_id)
+        if format == "docx":
+            content = compile_to_docx(book, outline, approved_chapters)
+            logger.info("Compiled DOCX document for book %s", book_id)
+            return StreamingResponse(
+                iter([content]),
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers=headers,
+            )
+
+        if format == "pdf":
+            content = compile_to_pdf(book, outline, approved_chapters)
+            logger.info("Compiled PDF document for book %s", book_id)
+            return StreamingResponse(
+                iter([content]),
+                media_type="application/pdf",
+                headers=headers,
+            )
+
         compiled_sections = [book["title"].strip()]
 
         if book.get("notes"):
-            compiled_sections.extend(["", "Notes", book["notes"].strip()])
+            compiled_sections.extend(["", "Author Notes", book["notes"].strip()])
 
-        if outline and outline.get("content"):
+        if outline.get("content"):
             compiled_sections.extend(["", "Outline", outline["content"].strip()])
 
-        for chapter in chapters:
+        for chapter in approved_chapters:
+            chapter_title = extract_chapter_title(
+                outline.get("content", ""), chapter["chapter_number"]
+            )
             compiled_sections.extend(
                 [
                     "",
-                    f"Chapter {chapter['chapter_number']}",
+                    f"Chapter {chapter['chapter_number']} - {chapter_title}",
                     chapter["content"].strip(),
                 ]
             )
+            if chapter.get("summary"):
+                compiled_sections.extend(["", f"Summary: {chapter['summary'].strip()}"])
 
-        compiled_content = "\n".join(compiled_sections).strip()
-        filename = f"{book['title'].replace(' ', '-').lower()}-final.txt"
-
-        logger.info("Compiled final document for book %s", book_id)
-        return {
-            "message": "Final document generated successfully.",
-            "book_id": book_id,
-            "filename": filename,
-            "download_url": _build_download_url(compiled_content),
-        }
+        content = "\n".join(compiled_sections).strip().encode("utf-8")
+        logger.info("Compiled TXT document for book %s", book_id)
+        return StreamingResponse(
+            iter([content]),
+            media_type="text/plain",
+            headers=headers,
+        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -348,6 +383,11 @@ async def generate_chapter_stream(book_id: str):
                 content=full_content,
                 status="waiting_for_review",
             )
+            notify(
+                "chapter_ready",
+                book["title"],
+                f"Chapter {next_number} is ready for review",
+            )
             update_book_status(book_id, "chapters_in_progress")
 
             yield _serialize_event(
@@ -410,6 +450,11 @@ async def generate_next_chapter(book_id: str):
             chapter_number=next_number,
             content=content,
             status="waiting_for_review",
+        )
+        notify(
+            "chapter_ready",
+            book["title"],
+            f"Chapter {next_number} is ready for review",
         )
         update_book_status(book_id, "chapters_in_progress")
         return {

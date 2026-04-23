@@ -4,3 +4,6 @@ supabase
 openai
 pydantic
 python-dotenv
+python-docx
+reportlab
+httpx
