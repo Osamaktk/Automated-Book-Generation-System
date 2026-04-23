@@ -53,7 +53,8 @@ def call_ai(prompt: str, max_tokens: int = 2000) -> str:
     response = client.chat.completions.create(
         model="openrouter/free",
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens
+        max_tokens=max_tokens,
+        timeout=90
     )
     return response.choices[0].message.content
 
