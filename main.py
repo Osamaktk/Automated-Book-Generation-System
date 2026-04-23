@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import os
 import json
 import logging
+import asyncio
 from supabase import create_client
 from openai import OpenAI
 
@@ -60,20 +61,40 @@ def call_ai(prompt: str, max_tokens: int = 2000) -> str:
     )
     return response.choices[0].message.content
 
-# ─── HELPER: STREAM AI ────────────────────────────────────
-def stream_ai(prompt: str, max_tokens: int = 2000):
-    """Returns a streaming generator of text chunks."""
-    stream = client.chat.completions.create(
-        model="openrouter/free",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=max_tokens,
-        stream=True,
-        timeout=90
-    )
-    for chunk in stream:
-        delta = chunk.choices[0].delta
-        if hasattr(delta, "content") and delta.content:
-            yield delta.content
+# ─── HELPER: STREAM AI (async) ────────────────────────────
+async def stream_ai_async(prompt: str, max_tokens: int = 2000):
+    """Async generator that streams text chunks from OpenRouter."""
+    loop = asyncio.get_event_loop()
+    queue = asyncio.Queue()
+
+    def run_stream():
+        try:
+            stream = client.chat.completions.create(
+                model="openrouter/free",
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=max_tokens,
+                stream=True,
+                timeout=90
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if hasattr(delta, "content") and delta.content:
+                    loop.call_soon_threadsafe(queue.put_nowait, delta.content)
+        except Exception as e:
+            loop.call_soon_threadsafe(queue.put_nowait, f"__ERROR__:{e}")
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    # Run blocking stream in thread pool
+    asyncio.get_event_loop().run_in_executor(None, run_stream)
+
+    while True:
+        chunk = await queue.get()
+        if chunk is None:
+            break
+        if isinstance(chunk, str) and chunk.startswith("__ERROR__:"):
+            raise Exception(chunk[10:])
+        yield chunk
 
 # ─── PROMPTS ──────────────────────────────────────────────
 def outline_prompt(title, notes, editor_notes=""):
@@ -146,14 +167,13 @@ async def create_book_stream(input: BookInput):
             }).execute()
             book_id = book_result.data[0]["id"]
 
-            # Send book_id to frontend immediately
             yield f"data: {json.dumps({'type': 'book_id', 'book_id': book_id})}\n\n"
 
             # 2. Stream outline from AI
             prompt = outline_prompt(input.title, input.notes)
             full_content = ""
 
-            for chunk in stream_ai(prompt, max_tokens=2000):
+            async for chunk in stream_ai_async(prompt, max_tokens=2000):
                 full_content += chunk
                 yield f"data: {json.dumps({'type': 'chunk', 'text': chunk})}\n\n"
 
