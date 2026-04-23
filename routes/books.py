@@ -1,10 +1,11 @@
 import json
+from urllib.parse import quote
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from ai import call_ai, stream_ai_async
-from config import logger
+from config import logger, supabase
 from database import (
     create_book,
     create_chapter,
@@ -35,6 +36,10 @@ def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
         for chapter in approved_chapters
         if chapter.get("summary")
     ]
+
+
+def _build_download_url(content: str) -> str:
+    return f"data:text/plain;charset=utf-8,{quote(content)}"
 
 
 @router.post("/create-stream")
@@ -118,6 +123,52 @@ async def get_book_route(book_id: str):
         raise HTTPException(500, str(exc))
 
 
+@router.delete("/{book_id}")
+async def delete_book_route(book_id: str):
+    try:
+        book = get_book(book_id)
+        if not book:
+            raise HTTPException(404, "Book not found")
+
+        chapters = (
+            supabase.table("chapters").select("id").eq("book_id", book_id).execute().data
+            or []
+        )
+        outlines = (
+            supabase.table("outlines").select("id").eq("book_id", book_id).execute().data
+            or []
+        )
+
+        chapters_deleted = len(chapters)
+        outlines_deleted = len(outlines)
+
+        if chapters_deleted:
+            supabase.table("chapters").delete().eq("book_id", book_id).execute()
+
+        if outlines_deleted:
+            supabase.table("outlines").delete().eq("book_id", book_id).execute()
+
+        supabase.table("books").delete().eq("id", book_id).execute()
+
+        logger.info(
+            "Deleted book %s with %s chapters and %s outlines",
+            book_id,
+            chapters_deleted,
+            outlines_deleted,
+        )
+        return {
+            "message": "Book deleted successfully",
+            "book_id": book_id,
+            "chapters_deleted": chapters_deleted,
+            "outlines_deleted": outlines_deleted,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Delete book failed: %s", exc, exc_info=True)
+        raise HTTPException(500, str(exc))
+
+
 @router.post("/{book_id}/feedback")
 async def submit_outline_feedback(book_id: str, feedback: EditorFeedback):
     try:
@@ -170,6 +221,63 @@ async def submit_outline_feedback(book_id: str, feedback: EditorFeedback):
     except HTTPException:
         raise
     except Exception as exc:
+        raise HTTPException(500, str(exc))
+
+
+@router.post("/{book_id}/compile")
+async def compile_book_route(book_id: str):
+    try:
+        book = get_book(book_id)
+        if not book:
+            raise HTTPException(404, "Book not found")
+
+        chapters = (
+            supabase.table("chapters")
+            .select("chapter_number, content, status")
+            .eq("book_id", book_id)
+            .order("chapter_number")
+            .execute()
+            .data
+            or []
+        )
+        if not chapters:
+            raise HTTPException(400, "No chapters found to compile")
+
+        if any(chapter["status"] != "approved" for chapter in chapters):
+            raise HTTPException(400, "All chapters must be approved before compiling")
+
+        outline = get_latest_outline(book_id)
+        compiled_sections = [book["title"].strip()]
+
+        if book.get("notes"):
+            compiled_sections.extend(["", "Notes", book["notes"].strip()])
+
+        if outline and outline.get("content"):
+            compiled_sections.extend(["", "Outline", outline["content"].strip()])
+
+        for chapter in chapters:
+            compiled_sections.extend(
+                [
+                    "",
+                    f"Chapter {chapter['chapter_number']}",
+                    chapter["content"].strip(),
+                ]
+            )
+
+        compiled_content = "\n".join(compiled_sections).strip()
+        filename = f"{book['title'].replace(' ', '-').lower()}-final.txt"
+
+        logger.info("Compiled final document for book %s", book_id)
+        return {
+            "message": "Final document generated successfully.",
+            "book_id": book_id,
+            "filename": filename,
+            "download_url": _build_download_url(compiled_content),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Compile book failed: %s", exc, exc_info=True)
         raise HTTPException(500, str(exc))
 
 
