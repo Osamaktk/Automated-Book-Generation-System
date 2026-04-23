@@ -47,11 +47,20 @@ except Exception as e:
     logger.error(f"❌ OpenRouter: {e}")
     raise
 
-# ─── MODEL TO USE ─────────────────────────────────────────
-# Change this to any valid OpenRouter model ID you have access to.
-# Free options: "mistralai/mistral-7b-instruct:free", "meta-llama/llama-3-8b-instruct:free"
-AI_MODEL = os.environ.get("AI_MODEL", "mistralai/mistral-7b-instruct:free")
+# ─── MODEL POOL ─────────────────────────────────────────
+import os
 
+AI_MODELS = [
+    "mistralai/mistral-7b-instruct",
+    "mistralai/mistral-7b-instruct-v0.2",
+    "meta-llama/llama-3-8b-instruct",
+    "meta-llama/llama-3.1-8b-instruct",
+    "google/gemma-7b-it",
+    "nousresearch/hermes-2-pro-llama-3-8b",
+]
+
+# Optional override (if you still want manual control)
+AI_MODEL = os.environ.get("AI_MODEL")
 # ─── PYDANTIC MODELS ──────────────────────────────────────
 class BookInput(BaseModel):
     title: str
