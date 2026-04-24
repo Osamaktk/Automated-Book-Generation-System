@@ -66,26 +66,43 @@ export function GuestStorageProvider({ children }) {
         throw new Error("Guest book not found.");
       }
 
+      const shouldGenerateFirstChapter =
+        payload.status === "approved" && detail.chapters.length === 0;
+
       const nextOutline =
         payload.status === "needs_revision"
           ? regenerateGuestOutline(detail.book, detail.outline, payload.editor_notes || "")
           : { ...detail.outline, status: "approved", editor_notes: payload.editor_notes || "" };
 
+      const nextChapter = shouldGenerateFirstChapter
+        ? createGuestChapterBundle(
+            { ...detail.book, status: "outline_approved" },
+            nextOutline,
+            detail.chapters
+          )
+        : null;
+
       const nextBookStatus =
-        payload.status === "approved" ? "outline_approved" : "waiting_for_review";
+        payload.status === "approved"
+          ? nextChapter
+            ? "chapters_in_progress"
+            : "outline_approved"
+          : "waiting_for_review";
 
       updateGuestState(setGuestState, (current) => ({
         books: current.books.map((item) =>
           item.id === bookId ? { ...item, status: nextBookStatus } : item
         ),
         outlines: current.outlines.map((item) => (item.id === nextOutline.id ? nextOutline : item)),
-        chapters: current.chapters
+        chapters: nextChapter ? [...current.chapters, nextChapter] : current.chapters
       }));
 
       return {
         message:
           payload.status === "approved"
-            ? "Outline approved locally."
+            ? nextChapter
+              ? `Outline approved locally. Chapter ${nextChapter.chapter_number} was generated for review.`
+              : "Outline approved locally."
             : "Outline revised locally and is ready for review."
       };
     }
