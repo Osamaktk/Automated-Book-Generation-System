@@ -185,13 +185,50 @@ docs/
 
 ## Screenshots and Demo
 
-Recommended final submission assets:
+### Dashboard Overview
 
-- dashboard overview screenshot
-- outline review screenshot
-- chapter review screenshot
-- final export screenshot
-- notification email screenshot
+![Library Dashboard](docs/images/screenshots/dashboard-library.png)
+
+The library dashboard shows manuscript cards, high-level counts, and the main editorial workspace entry point.
+
+### Outline Review
+
+![Outline Waiting State](docs/images/screenshots/book-outline-review.png)
+
+This screen shows a manuscript waiting for outline review, planned chapter count, and the workflow stage indicator.
+
+### Brief-Aligned Fields
+
+![Project Brief Fields](docs/images/screenshots/brief-fields-outline.png)
+
+The dashboard exposes the brief-style fields directly in the UI, including `notes_on_outline_before`, `status_outline_notes`, `planned_chapter_count`, and `no_notes_needed`.
+
+### Outline Actions and Story Context
+
+![Outline Actions](docs/images/screenshots/outline-actions-context.png)
+
+The editor can approve the outline or request revision before chapter generation continues.
+
+### Completion State
+
+![Book Complete Overview](docs/images/screenshots/book-complete-overview.png)
+
+Once all planned chapters are approved, the manuscript is marked complete and the progress indicators update accordingly.
+
+### Final Export
+
+![Final Export](docs/images/screenshots/final-export.png)
+
+The final manuscript can be downloaded in `docx` or `pdf` once completion is reached.
+
+### Email Notifications
+
+![Gmail Notifications](docs/images/screenshots/gmail-notifications.png)
+
+The system sends email notifications when the outline is ready, when chapters are ready for review, and when the manuscript is complete.
+
+### Final Submission Assets
+
 - one sample manuscript export
 - one short walkthrough video
 
