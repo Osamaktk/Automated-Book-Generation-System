@@ -67,11 +67,7 @@ function BookDetailPage() {
     try {
       setFeedbackLoading(true);
       setMessage(null);
-      const response = await submitOutlineFeedback(
-        bookId,
-        { status, editor_notes: revNotes },
-        accessToken
-      );
+      const response = await submitOutlineFeedback(bookId, { status, editor_notes: revNotes }, accessToken);
       setMessage({ type: "success", text: response.message || "Outline updated." });
       setShowRev(false);
       setRevNotes("");
@@ -104,9 +100,6 @@ function BookDetailPage() {
             type: "success",
             text: `Chapter ${event.chapter_number} ready for review.`
           });
-        }
-        if (event.type === "error") {
-          throw new Error(event.message || "Unable to generate chapter.");
         }
       });
     } catch (err) {

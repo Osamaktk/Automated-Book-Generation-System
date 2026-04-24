@@ -6,8 +6,8 @@ import NotesPanels from "../components/shared/NotesPanels";
 import Alert from "../components/ui/Alert";
 import Loader from "../components/ui/Loader";
 import StatusBadge from "../components/ui/StatusBadge";
-import { useChapterDetail } from "../hooks/useChapterDetail";
 import { useAuth } from "../hooks/useAuth";
+import { useChapterDetail } from "../hooks/useChapterDetail";
 import { submitChapterFeedback } from "../services/bookService";
 
 function ChapterDetailPage() {
@@ -37,11 +37,7 @@ function ChapterDetailPage() {
     try {
       setFeedbackLoading(true);
       setMessage(null);
-      const response = await submitChapterFeedback(
-        chapterId,
-        { status, editor_notes: revisionNotes },
-        accessToken
-      );
+      const response = await submitChapterFeedback(chapterId, { status, editor_notes: revisionNotes }, accessToken);
       setMessage({ type: "success", text: response.message || "Chapter updated." });
       setShowRevision(false);
       setRevisionNotes("");

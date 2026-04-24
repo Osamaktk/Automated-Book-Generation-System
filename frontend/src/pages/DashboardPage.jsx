@@ -22,7 +22,6 @@ function DashboardPage() {
   const [streaming, setStreaming] = useState("");
 
   const tab = searchParams.get("tab") === "create" ? "create" : "library";
-
   const filteredBooks = useMemo(() => books, [books]);
   const draftCount = useMemo(() => books.filter(isDraft).length, [books]);
   const completedCount = useMemo(() => books.length - draftCount, [books, draftCount]);
@@ -54,27 +53,20 @@ function DashboardPage() {
       setMessage(null);
       let nextBookId = null;
 
-      await createBookStream(
-        { title: title.trim(), notes: notes.trim() },
-        accessToken,
-        (event) => {
-          if (event.type === "book_id") {
-            nextBookId = event.book_id;
-          }
-          if (event.type === "chunk") {
-            setStreaming((current) => current + event.text);
-          }
-          if (event.type === "done") {
-            const resolvedBookId = nextBookId || event.book_id;
-            if (resolvedBookId) {
-              navigate(`/books/${resolvedBookId}`);
-            }
-          }
-          if (event.type === "error") {
-            throw new Error(event.message || "Unable to create the book.");
+      await createBookStream({ title: title.trim(), notes: notes.trim() }, accessToken, (event) => {
+        if (event.type === "book_id") {
+          nextBookId = event.book_id;
+        }
+        if (event.type === "chunk") {
+          setStreaming((current) => current + event.text);
+        }
+        if (event.type === "done") {
+          const resolvedBookId = nextBookId || event.book_id;
+          if (resolvedBookId) {
+            navigate(`/books/${resolvedBookId}`);
           }
         }
-      );
+      });
 
       await reload();
     } catch (err) {

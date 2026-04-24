@@ -1,11 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import ProtectedRoute from "./components/ui/ProtectedRoute";
 import AppShell from "./components/layout/AppShell";
-import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
+import ProtectedRoute from "./components/ui/ProtectedRoute";
 import BookDetailPage from "./pages/BookDetailPage";
 import ChapterDetailPage from "./pages/ChapterDetailPage";
+import DashboardPage from "./pages/DashboardPage";
+import LoginPage from "./pages/LoginPage";
 import SharedBookPage from "./pages/SharedBookPage";
 
 function App() {

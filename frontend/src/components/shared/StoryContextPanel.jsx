@@ -5,15 +5,15 @@ function StoryContextPanel({ chapters }) {
       {chapters?.length ? (
         <div className="context-list">
           {chapters.map((chapter) => (
-            <div className="context-item" key={chapter.id}>
-              <div className="chapter-meta-title">Chapter {chapter.chapter_number}</div>
-              <div className="meta-panel-body">{chapter.summary}</div>
+            <div key={chapter.id} className="context-item card">
+              <div className="meta-panel-label">Chapter {chapter.chapter_number}</div>
+              <div className="content-box">{chapter.summary}</div>
             </div>
           ))}
         </div>
       ) : (
         <div className="empty-state">
-          <p>No chapter summaries yet.</p>
+          <p>Approved chapter summaries will appear here to show narrative continuity.</p>
         </div>
       )}
     </div>

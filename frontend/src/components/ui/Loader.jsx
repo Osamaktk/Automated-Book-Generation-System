@@ -1,8 +1,8 @@
-function Loader({ msg }) {
+function Loader({ msg = "Loading..." }) {
   return (
     <div className="loading-wrap">
       <div className="spinner-ring" />
-      <div className="loading-msg">{msg || "Loading..."}</div>
+      <div>{msg}</div>
     </div>
   );
 }

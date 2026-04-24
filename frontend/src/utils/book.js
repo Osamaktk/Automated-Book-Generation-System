@@ -31,10 +31,7 @@ export function getBookNotifications(book, outline, chapters) {
 }
 
 export function isDraft(book) {
-  return [
-    "generating",
-    "waiting_for_review",
-    "outline_approved",
-    "chapters_in_progress"
-  ].includes(book.status);
+  return ["generating", "waiting_for_review", "outline_approved", "chapters_in_progress"].includes(
+    book.status
+  );
 }

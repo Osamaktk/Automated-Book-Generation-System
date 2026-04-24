@@ -1,6 +1,6 @@
 import { createContext, useEffect, useMemo, useState } from "react";
 
-import { supabase } from "../services/supabase";
+import { supabase } from "../lib/supabase";
 
 export const AuthContext = createContext(null);
 
@@ -36,20 +36,14 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(session?.user),
       isLoading: session === undefined,
       async signIn(email, password) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           throw error;
         }
         return data;
       },
       async signUp(email, password) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password
-        });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) {
           throw error;
         }
@@ -60,6 +54,27 @@ export function AuthProvider({ children }) {
         if (error) {
           throw error;
         }
+      },
+      async sendMagicLink(email) {
+        const { data, error } = await supabase.auth.signInWithOtp({
+          email,
+          options: {
+            emailRedirectTo: window.location.origin
+          }
+        });
+        if (error) {
+          throw error;
+        }
+        return data;
+      },
+      async resetPassword(email) {
+        const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin
+        });
+        if (error) {
+          throw error;
+        }
+        return data;
       }
     }),
     [session]

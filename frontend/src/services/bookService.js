@@ -28,10 +28,6 @@ export async function getChapter(chapterId, accessToken) {
   return request(`/chapters/${chapterId}`, { accessToken });
 }
 
-export async function getSharedChapter(chapterId, shareToken) {
-  return sharedRequest(`/chapters/${chapterId}`, shareToken);
-}
-
 export async function submitOutlineFeedback(bookId, payload, accessToken) {
   return request(`/books/${bookId}/feedback`, {
     method: "POST",

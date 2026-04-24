@@ -82,7 +82,7 @@ export async function downloadRequest(path, { accessToken } = {}) {
 
   const blob = await response.blob();
   const contentDisposition = response.headers.get("Content-Disposition") || "";
-  const match = contentDisposition.match(/filename=\"?([^"]+)\"?/i);
+  const match = contentDisposition.match(/filename=\"?([^\"]+)\"?/i);
   return {
     blob,
     filename: match?.[1] || "download"

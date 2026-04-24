@@ -1,4 +1,4 @@
-function EditorNotesHistory({ items, emptyText = "No editor notes yet" }) {
+function EditorNotesHistory({ items, emptyText }) {
   if (!items?.length) {
     return (
       <div className="empty-state">
@@ -10,9 +10,9 @@ function EditorNotesHistory({ items, emptyText = "No editor notes yet" }) {
   return (
     <div className="history-list">
       {items.map((item) => (
-        <div className="history-item" key={`${item.label}-${item.text}`}>
-          <div className="history-title">{item.label}</div>
-          <div className="meta-panel-body">{item.text}</div>
+        <div key={`${item.label}-${item.text}`} className="history-item card">
+          <div className="meta-panel-label">{item.label}</div>
+          <div className="content-box">{item.text}</div>
         </div>
       ))}
     </div>

@@ -1,21 +1,23 @@
-const statusMap = {
-  waiting_for_review: ["badge-review", "Awaiting Review"],
-  approved: ["badge-approved", "Approved"],
-  outline_approved: ["badge-approved", "Outline Approved"],
-  chapters_in_progress: ["badge-progress", "In Progress"],
-  chapters_complete: ["badge-complete", "Complete"],
-  generating: ["badge-progress", "Generating"],
-  needs_revision: ["badge-review", "Needs Revision"],
-  waiting_for_input: ["badge-default", "Draft"]
+const STATUS_MAP = {
+  waiting_for_review: { label: "Waiting", className: "badge-review" },
+  approved: { label: "Approved", className: "badge-approved" },
+  outline_approved: { label: "Outline Approved", className: "badge-approved" },
+  chapters_in_progress: { label: "In Progress", className: "badge-progress" },
+  chapters_complete: { label: "Complete", className: "badge-complete" },
+  generating: { label: "Generating", className: "badge-progress" },
+  needs_revision: { label: "Needs Revision", className: "badge-review" }
 };
 
 function StatusBadge({ status }) {
-  const [className, label] =
-    statusMap[status] || ["badge-default", status ? status.replaceAll("_", " ") : "Unknown"];
+  const meta = STATUS_MAP[status] || {
+    label: (status || "unknown").replaceAll("_", " "),
+    className: "badge-default"
+  };
 
   return (
-    <span className={`badge ${className}`}>
-      <span className="badge-dot" /> {label}
+    <span className={`badge ${meta.className}`}>
+      <span className="badge-dot" />
+      {meta.label}
     </span>
   );
 }

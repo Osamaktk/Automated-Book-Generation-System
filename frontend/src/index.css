@@ -16,6 +16,7 @@
   --muted2: #7a7a7a;
   --success2: #4dbf87;
   --warn: #c98540;
+  --danger: #e07070;
   --radius: 12px;
   --radius-lg: 18px;
 }
@@ -46,6 +47,10 @@ button,
 input,
 textarea {
   font: inherit;
+}
+
+#root {
+  min-height: 100vh;
 }
 
 .app-shell {
@@ -472,7 +477,7 @@ textarea {
 .alert-error {
   background: rgba(184, 64, 64, 0.08);
   border: 1px solid rgba(184, 64, 64, 0.2);
-  color: #e07070;
+  color: var(--danger);
 }
 
 .alert-info {
@@ -557,6 +562,10 @@ textarea {
   gap: 12px;
 }
 
+.download-btns {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
 .pipeline {
   display: flex;
   flex-wrap: wrap;
@@ -590,10 +599,6 @@ textarea {
 
 .pipeline-arrow {
   color: var(--muted);
-}
-
-.download-btns {
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
 
 .download-panel,

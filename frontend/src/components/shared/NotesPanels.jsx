@@ -7,12 +7,16 @@ function NotesPanels({
   return (
     <div className="panel-grid">
       <div className="meta-panel">
-        <div className="meta-panel-label">{beforeLabel}</div>
-        <div className="meta-panel-body">{beforeNotes || "No notes available."}</div>
+        <div className="card">
+          <div className="meta-panel-label">{beforeLabel}</div>
+          <div className="meta-panel-body content-box">{beforeNotes || "No notes added."}</div>
+        </div>
       </div>
       <div className="meta-panel">
-        <div className="meta-panel-label">{afterLabel}</div>
-        <div className="meta-panel-body">{afterNotes || "No editor notes yet."}</div>
+        <div className="card">
+          <div className="meta-panel-label">{afterLabel}</div>
+          <div className="meta-panel-body content-box">{afterNotes || "No notes yet."}</div>
+        </div>
       </div>
     </div>
   );

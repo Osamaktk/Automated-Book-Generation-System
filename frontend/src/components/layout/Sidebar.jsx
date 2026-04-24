@@ -4,8 +4,8 @@ function Sidebar({ onLogout, userEmail }) {
   const location = useLocation();
 
   const items = [
-    { to: "/dashboard", icon: "Library", label: "Library", key: "library" },
-    { to: "/dashboard?tab=create", icon: "Create", label: "New Book", key: "create" }
+    { to: "/dashboard", icon: "L", label: "Library", key: "library" },
+    { to: "/dashboard?tab=create", icon: "N", label: "New Book", key: "create" }
   ];
 
   return (
@@ -26,7 +26,7 @@ function Sidebar({ onLogout, userEmail }) {
 
           return (
             <Link key={item.to} className={`nav-item ${active ? "active" : ""}`} to={item.to}>
-              <span className="nav-icon">{item.icon.slice(0, 1)}</span>
+              <span className="nav-icon">{item.icon}</span>
               {item.label}
             </Link>
           );
@@ -43,7 +43,7 @@ function Sidebar({ onLogout, userEmail }) {
           </div>
         ) : null}
         <button className="btn-logout" onClick={onLogout} type="button">
-          <span>Out</span> Sign Out
+          Sign Out
         </button>
       </div>
     </nav>
