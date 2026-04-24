@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 
-function Sidebar({ isAuthenticated, onAuthClick, onLogout, userEmail }) {
+function Sidebar() {
   const location = useLocation();
 
   const items = [
@@ -34,28 +34,10 @@ function Sidebar({ isAuthenticated, onAuthClick, onLogout, userEmail }) {
       </div>
 
       <div className="sidebar-footer">
-        {isAuthenticated && userEmail ? (
-          <div className="user-chip">
-            <div className="user-avatar">{userEmail[0].toUpperCase()}</div>
-            <div className="user-email" title={userEmail}>
-              {userEmail}
-            </div>
-          </div>
-        ) : (
-          <div className="guest-chip">
-            <div className="user-avatar">G</div>
-            <div className="user-email">Guest Mode Active</div>
-          </div>
-        )}
-        {isAuthenticated ? (
-          <button className="btn-logout" onClick={onLogout} type="button">
-            Sign Out
-          </button>
-        ) : (
-          <button className="btn-logout" onClick={onAuthClick} type="button">
-            Sign In
-          </button>
-        )}
+        <div className="guest-chip">
+          <div className="user-avatar">E</div>
+          <div className="user-email">Editor Workspace</div>
+        </div>
       </div>
     </nav>
   );

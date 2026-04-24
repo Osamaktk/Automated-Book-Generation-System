@@ -1,32 +1,27 @@
 import json
-import os
 import re
-import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from supabase import Client
 
 from ai import call_ai, stream_ai_async
-from config import create_rls_client, logger
+from config import logger, supabase
 from database import (
     create_book,
-    create_book_share,
     create_chapter,
     create_outline,
     get_approved_chapters,
     get_approved_outline,
     get_book,
-    get_book_share_by_token,
     get_latest_outline,
     get_pending_review_chapter,
     list_books,
     update_book_status,
     update_outline,
 )
-from models import BookInput, EditorFeedback, ShareUserInput
+from models import BookInput, EditorFeedback
 from prompts import build_chapter_prompt, build_outline_prompt, extract_chapter_title
-from services.auth import AuthenticatedUser, get_current_user, get_optional_current_user
 from services.compiler import compile_to_docx, compile_to_pdf
 from services.notifications import notify
 
@@ -44,43 +39,6 @@ def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
         for chapter in approved_chapters
         if chapter.get("summary")
     ]
-
-
-def _build_user_client(current_user: AuthenticatedUser) -> Client:
-    """Create a request-scoped Supabase client for the authenticated user."""
-    return create_rls_client(current_user.access_token)
-
-
-def _require_owner(book: dict, current_user: AuthenticatedUser) -> None:
-    """Ensure the authenticated user owns the target book."""
-    if book.get("user_id") != current_user.user_id:
-        raise HTTPException(403, "Only the book owner can perform this action")
-
-
-def _resolve_book_read_access(
-    book_id: str,
-    current_user: AuthenticatedUser | None,
-    share: str | None = None,
-) -> tuple[dict, Client]:
-    """Resolve read access for an owner/shared user or a public share token."""
-    if share:
-        public_client = create_rls_client()
-        share_row = get_book_share_by_token(book_id, share, client=public_client)
-        if not share_row:
-            raise HTTPException(404, "Share link not found")
-        book = get_book(book_id, client=public_client)
-        if not book:
-            raise HTTPException(404, "Book not found")
-        return book, public_client
-
-    if not current_user:
-        raise HTTPException(401, "Authentication required")
-
-    user_client = _build_user_client(current_user)
-    book = get_book(book_id, client=user_client)
-    if not book:
-        raise HTTPException(404, "Book not found")
-    return book, user_client
 
 
 def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
@@ -140,17 +98,14 @@ def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
 @router.post("/create-stream")
 async def create_book_stream(
     input: BookInput,
-    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     async def generate():
         try:
-            user_client = _build_user_client(current_user)
             book = create_book(
                 input.title,
                 input.notes,
-                current_user.user_id,
                 status="generating",
-                client=user_client,
+                client=supabase,
             )
             book_id = book["id"]
 
@@ -167,10 +122,10 @@ async def create_book_stream(
                 book_id=book_id,
                 content=full_content,
                 status="waiting_for_review",
-                client=user_client,
+                client=supabase,
             )
             notify("outline_ready", book["title"], f"Book ID: {book_id}")
-            update_book_status(book_id, "waiting_for_review", client=user_client)
+            update_book_status(book_id, "waiting_for_review", client=supabase)
 
             yield _serialize_event(
                 {"type": "done", "book_id": book_id, "outline_id": outline["id"]}
@@ -189,26 +144,23 @@ async def create_book_stream(
 @router.post("/create")
 async def create_book_route(
     input: BookInput,
-    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        user_client = _build_user_client(current_user)
         book = create_book(
             input.title,
             input.notes,
-            current_user.user_id,
             status="generating",
-            client=user_client,
+            client=supabase,
         )
         outline_content = call_ai(build_outline_prompt(input.title, input.notes), 2000)
         outline = create_outline(
             book_id=book["id"],
             content=outline_content,
             status="waiting_for_review",
-            client=user_client,
+            client=supabase,
         )
         notify("outline_ready", book["title"], f"Book ID: {book['id']}")
-        update_book_status(book["id"], "waiting_for_review", client=user_client)
+        update_book_status(book["id"], "waiting_for_review", client=supabase)
         return {
             "message": "Book created!",
             "book_id": book["id"],
@@ -222,12 +174,9 @@ async def create_book_route(
 
 
 @router.get("")
-async def list_books_route(
-    current_user: AuthenticatedUser = Depends(get_current_user),
-):
+async def list_books_route():
     try:
-        user_client = _build_user_client(current_user)
-        return {"books": list_books(client=user_client)}
+        return {"books": list_books(client=supabase)}
     except Exception as exc:
         logger.error("List books failed: %s", exc, exc_info=True)
         raise HTTPException(500, str(exc))
@@ -236,12 +185,12 @@ async def list_books_route(
 @router.get("/{book_id}")
 async def get_book_route(
     book_id: str,
-    share: str | None = None,
-    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
 ):
     try:
-        book, client = _resolve_book_read_access(book_id, current_user, share)
-        return {"book": book, "outline": get_latest_outline(book_id, client=client)}
+        book = get_book(book_id, client=supabase)
+        if not book:
+            raise HTTPException(404, "Book not found")
+        return {"book": book, "outline": get_latest_outline(book_id, client=supabase)}
     except HTTPException:
         raise
     except Exception as exc:
@@ -252,21 +201,18 @@ async def get_book_route(
 @router.delete("/{book_id}")
 async def delete_book_route(
     book_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        user_client = _build_user_client(current_user)
-        book = get_book(book_id, client=user_client)
+        book = get_book(book_id, client=supabase)
         if not book:
             raise HTTPException(404, "Book not found")
-        _require_owner(book, current_user)
 
         chapters = (
-            user_client.table("chapters").select("id").eq("book_id", book_id).execute().data
+            supabase.table("chapters").select("id").eq("book_id", book_id).execute().data
             or []
         )
         outlines = (
-            user_client.table("outlines").select("id").eq("book_id", book_id).execute().data
+            supabase.table("outlines").select("id").eq("book_id", book_id).execute().data
             or []
         )
 
@@ -274,12 +220,12 @@ async def delete_book_route(
         outlines_deleted = len(outlines)
 
         if chapters_deleted:
-            user_client.table("chapters").delete().eq("book_id", book_id).execute()
+            supabase.table("chapters").delete().eq("book_id", book_id).execute()
 
         if outlines_deleted:
-            user_client.table("outlines").delete().eq("book_id", book_id).execute()
+            supabase.table("outlines").delete().eq("book_id", book_id).execute()
 
-        user_client.table("books").delete().eq("id", book_id).execute()
+        supabase.table("books").delete().eq("id", book_id).execute()
 
         logger.info(
             "Deleted book %s with %s chapters and %s outlines",
@@ -304,33 +250,30 @@ async def delete_book_route(
 async def submit_outline_feedback(
     book_id: str,
     feedback: EditorFeedback,
-    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        user_client = _build_user_client(current_user)
         if feedback.status not in {"approved", "needs_revision"}:
             raise HTTPException(400, "Status must be 'approved' or 'needs_revision'")
 
-        outline = get_latest_outline(book_id, client=user_client)
+        outline = get_latest_outline(book_id, client=supabase)
         if not outline:
             raise HTTPException(404, "Outline not found")
 
-        book = get_book(book_id, client=user_client)
+        book = get_book(book_id, client=supabase)
         if not book:
             raise HTTPException(404, "Book not found")
-        _require_owner(book, current_user)
 
         if feedback.status == "approved":
             update_outline(
                 outline["id"],
-                client=user_client,
+                client=supabase,
                 status="approved",
                 editor_notes=feedback.editor_notes,
             )
-            update_book_status(book_id, "outline_approved", client=user_client)
+            update_book_status(book_id, "outline_approved", client=supabase)
             first_chapter = _generate_next_chapter_for_book(
                 {**book, "status": "outline_approved"},
-                user_client,
+                supabase,
             )
             return {
                 "message": "Outline approved and first chapter generated!",
@@ -343,7 +286,7 @@ async def submit_outline_feedback(
 
         update_outline(
             outline["id"],
-            client=user_client,
+            client=supabase,
             status="needs_revision",
             editor_notes=feedback.editor_notes,
         )
@@ -355,10 +298,10 @@ async def submit_outline_feedback(
             book_id=book_id,
             content=new_content,
             status="waiting_for_review",
-            client=user_client,
+            client=supabase,
         )
         notify("outline_ready", book["title"], f"Book ID: {book_id}")
-        update_book_status(book_id, "waiting_for_review", client=user_client)
+        update_book_status(book_id, "waiting_for_review", client=supabase)
         return {
             "message": "Outline regenerated!",
             "book_id": book_id,
@@ -376,21 +319,26 @@ async def submit_outline_feedback(
 async def compile_book_route(
     book_id: str,
     format: str = "docx",
-    share: str | None = None,
-    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
 ):
     try:
         if format not in {"docx", "pdf", "txt"}:
             raise HTTPException(400, "Format must be one of: docx, pdf, txt")
 
-        book, client = _resolve_book_read_access(book_id, current_user, share)
+        book = get_book(book_id, client=supabase)
+        if not book:
+            raise HTTPException(404, "Book not found")
+        if book["status"] != "chapters_complete":
+            raise HTTPException(
+                400,
+                "Final manuscript export is only available after the book is marked complete.",
+            )
 
-        outline = get_latest_outline(book_id, client=client)
+        outline = get_latest_outline(book_id, client=supabase)
         if not outline:
             raise HTTPException(404, "Outline not found")
 
         chapters = (
-            client.table("chapters").select("*").eq("book_id", book_id).execute().data or []
+            supabase.table("chapters").select("*").eq("book_id", book_id).execute().data or []
         )
         approved_chapters = sorted(
             [chapter for chapter in chapters if chapter["status"] == "approved"],
@@ -468,16 +416,13 @@ async def compile_book_route(
 @router.post("/{book_id}/generate-chapter-stream")
 async def generate_chapter_stream(
     book_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     async def generate():
         try:
-            user_client = _build_user_client(current_user)
-            book = get_book(book_id, client=user_client)
+            book = get_book(book_id, client=supabase)
             if not book:
                 yield _serialize_event({"type": "error", "message": "Book not found"})
                 return
-            _require_owner(book, current_user)
 
             if book["status"] not in {"outline_approved", "chapters_in_progress"}:
                 yield _serialize_event(
@@ -488,14 +433,14 @@ async def generate_chapter_stream(
                 )
                 return
 
-            outline = get_approved_outline(book_id, client=user_client)
+            outline = get_approved_outline(book_id, client=supabase)
             if not outline:
                 yield _serialize_event(
                     {"type": "error", "message": "No approved outline found"}
                 )
                 return
 
-            pending_chapter = get_pending_review_chapter(book_id, client=user_client)
+            pending_chapter = get_pending_review_chapter(book_id, client=supabase)
             if pending_chapter:
                 yield _serialize_event(
                     {
@@ -505,7 +450,7 @@ async def generate_chapter_stream(
                 )
                 return
 
-            approved_chapters = get_approved_chapters(book_id, client=user_client)
+            approved_chapters = get_approved_chapters(book_id, client=supabase)
             next_number = len(approved_chapters) + 1
             chapter_title = extract_chapter_title(outline["content"], next_number)
             previous_summaries = _build_previous_summaries(approved_chapters)
@@ -536,14 +481,14 @@ async def generate_chapter_stream(
                 chapter_number=next_number,
                 content=full_content,
                 status="waiting_for_review",
-                client=user_client,
+                client=supabase,
             )
             notify(
                 "chapter_ready",
                 book["title"],
                 f"Chapter {next_number} is ready for review",
             )
-            update_book_status(book_id, "chapters_in_progress", client=user_client)
+            update_book_status(book_id, "chapters_in_progress", client=supabase)
 
             yield _serialize_event(
                 {
@@ -566,86 +511,14 @@ async def generate_chapter_stream(
 @router.post("/{book_id}/generate-chapter")
 async def generate_next_chapter(
     book_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        user_client = _build_user_client(current_user)
-        book = get_book(book_id, client=user_client)
+        book = get_book(book_id, client=supabase)
         if not book:
             raise HTTPException(404, "Book not found")
-        _require_owner(book, current_user)
-        return _generate_next_chapter_for_book(book, user_client)
+        return _generate_next_chapter_for_book(book, supabase)
     except HTTPException:
         raise
     except Exception as exc:
         logger.error("Generate chapter failed: %s", exc, exc_info=True)
-        raise HTTPException(500, str(exc))
-
-
-@router.post("/{book_id}/share/user")
-async def share_book_with_user(
-    book_id: str,
-    share_input: ShareUserInput,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-):
-    try:
-        user_client = _build_user_client(current_user)
-        book = get_book(book_id, client=user_client)
-        if not book:
-            raise HTTPException(404, "Book not found")
-        _require_owner(book, current_user)
-
-        share = create_book_share(
-            book_id=book_id,
-            shared_by=current_user.user_id,
-            shared_with=share_input.shared_with,
-            client=user_client,
-        )
-        return {
-            "message": "Book shared successfully",
-            "book_id": book_id,
-            "shared_with": share["shared_with"],
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Share with user failed: %s", exc, exc_info=True)
-        raise HTTPException(500, str(exc))
-
-
-@router.post("/{book_id}/share/link")
-async def share_book_with_link(
-    book_id: str,
-    current_user: AuthenticatedUser = Depends(get_current_user),
-):
-    try:
-        user_client = _build_user_client(current_user)
-        book = get_book(book_id, client=user_client)
-        if not book:
-            raise HTTPException(404, "Book not found")
-        _require_owner(book, current_user)
-
-        share_token = secrets.token_urlsafe(24)
-        create_book_share(
-            book_id=book_id,
-            shared_by=current_user.user_id,
-            share_token=share_token,
-            client=user_client,
-        )
-        frontend_url = os.environ.get("FRONTEND_URL", "").rstrip("/")
-        share_url = (
-            f"{frontend_url}/?book={book_id}&share={share_token}"
-            if frontend_url
-            else f"?book={book_id}&share={share_token}"
-        )
-        return {
-            "message": "Share link created successfully",
-            "book_id": book_id,
-            "share_token": share_token,
-            "share_url": share_url,
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error("Share link creation failed: %s", exc, exc_info=True)
         raise HTTPException(500, str(exc))

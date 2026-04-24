@@ -9,7 +9,3 @@ class BookInput(BaseModel):
 class EditorFeedback(BaseModel):
     status: str
     editor_notes: str = ""
-
-
-class ShareUserInput(BaseModel):
-    shared_with: str

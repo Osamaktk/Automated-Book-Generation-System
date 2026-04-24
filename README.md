@@ -1,66 +1,74 @@
-# 📘 AutoBook — Milestone 1
+# AutoBook
 
-Automated book generation system with human-in-the-loop review.
+Automated book generation system with a human-in-the-loop editorial workflow.
 
-## 🚀 Deploy to Railway
+## What It Does
 
-1. Push this folder to a GitHub repo
-2. Go to railway.app → New Project → Deploy from GitHub
-3. Select your repo
-4. Go to Variables tab and add:
-   - SUPABASE_URL
-   - SUPABASE_KEY
-   - DEEPSEEK_API_KEY
-5. Railway auto-deploys and gives you a live URL!
+- Create a book from a title and initial notes
+- Generate an outline and pause for editor review
+- Regenerate the outline when revision notes are submitted
+- Generate chapters sequentially using summaries of approved earlier chapters
+- Approve, revise, or mark the last chapter as the final chapter
+- Send optional SMTP or Microsoft Teams notifications
+- Export the final manuscript as `docx`, `pdf`, or `txt` only after final approval
 
-## 📡 API Endpoints
+## Stack
+
+- Backend: FastAPI
+- Database: Supabase
+- AI: OpenRouter-compatible chat models
+- Frontend: React + Vite
+- Output: `python-docx`, `reportlab`
+
+## Main API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET  | / | Health check |
-| POST | /books/create | Create book + generate outline |
-| GET  | /books | List all books |
-| GET  | /books/{id} | Get book + outline |
-| POST | /books/{id}/feedback | Editor approves or requests revision |
+| `GET` | `/` | Health check |
+| `POST` | `/books/create-stream` | Create a book and stream outline generation |
+| `GET` | `/books` | List all books |
+| `GET` | `/books/{id}` | Get a book and its latest outline |
+| `POST` | `/books/{id}/feedback` | Approve or revise the outline |
+| `GET` | `/books/{id}/chapters` | List book chapters |
+| `POST` | `/books/{id}/generate-chapter-stream` | Stream the next chapter |
+| `POST` | `/chapters/{id}/feedback` | Approve, revise, or mark final chapter |
+| `GET` | `/books/{id}/compile?format=docx` | Export after final approval |
 
-## 🧪 Test It (after deployment)
+## Environment Variables
 
-### Create a book:
-```
-POST /books/create
-{
-  "title": "The Lost City",
-  "notes": "A thriller about an archaeologist who discovers a hidden civilization in the Amazon jungle."
-}
-```
+Backend:
 
-### Approve the outline:
-```
-POST /books/{book_id}/feedback
-{
-  "status": "approved",
-  "editor_notes": ""
-}
-```
-
-### Request revision:
-```
-POST /books/{book_id}/feedback
-{
-  "status": "needs_revision",
-  "editor_notes": "Add more mystery elements and make chapter 3 about a chase scene."
-}
+```env
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+OPENROUTER_API_KEY=your_openrouter_api_key
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+SMTP_TO=
+TEAMS_WEBHOOK=
 ```
 
-## Configuration
+Frontend:
 
-Optional notification settings:
+```env
+VITE_API_URL=http://127.0.0.1:8000
+```
 
-- `SMTP_HOST` - SMTP server hostname, e.g. `smtp.gmail.com`
-- `SMTP_PORT` - SMTP port, default `587`
-- `SMTP_USER` - sender address, e.g. `autobook@gmail.com`
-- `SMTP_PASSWORD` - SMTP or app password
-- `SMTP_TO` - recipient list, comma-separated
-- `TEAMS_WEBHOOK` - full Microsoft Teams webhook URL
+## Local Run
 
-If any notification variable is missing, that channel is skipped silently.
+1. Install backend dependencies from `requirements.txt`
+2. Start the API with `uvicorn main:app --reload`
+3. In `frontend/`, run `npm install`
+4. Run `npm run dev`
+
+## Current Workflow
+
+1. Create a new book with title and notes.
+2. Review the generated outline.
+3. Approve the outline or request revision.
+4. Generate chapters one by one.
+5. Approve each chapter or request revision.
+6. Mark the last approved chapter as `Final Chapter`.
+7. Export the completed manuscript.

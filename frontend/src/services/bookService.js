@@ -1,4 +1,4 @@
-import { downloadRequest, request, sharedRequest, streamRequest } from "./apiClient";
+import { downloadRequest, request, streamRequest } from "./apiClient";
 
 export async function getBooks(accessToken) {
   return request("/books", { accessToken });
@@ -21,16 +21,8 @@ export async function getBook(bookId, accessToken) {
   return request(`/books/${bookId}`, { accessToken });
 }
 
-export async function getSharedBook(bookId, shareToken) {
-  return sharedRequest(`/books/${bookId}`, shareToken);
-}
-
 export async function getBookChapters(bookId, accessToken) {
   return request(`/books/${bookId}/chapters`, { accessToken });
-}
-
-export async function getSharedBookChapters(bookId, shareToken) {
-  return sharedRequest(`/books/${bookId}/chapters`, shareToken);
 }
 
 export async function getChapter(chapterId, accessToken) {
@@ -103,22 +95,5 @@ async function consumeEventStream(response, onEvent) {
 export async function downloadCompiledBook(bookId, format, accessToken) {
   return downloadRequest(`/books/${bookId}/compile?format=${encodeURIComponent(format)}`, {
     accessToken
-  });
-}
-
-export async function shareBookWithUser(bookId, sharedWith, accessToken) {
-  return request(`/books/${bookId}/share/user`, {
-    method: "POST",
-    accessToken,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ shared_with: sharedWith })
-  });
-}
-
-export async function createShareLink(bookId, accessToken) {
-  return request(`/books/${bookId}/share/link`, {
-    method: "POST",
-    accessToken,
-    headers: { "Content-Type": "application/json" }
   });
 }

@@ -6,14 +6,13 @@ from config import supabase
 def create_book(
     title: str,
     notes: str,
-    user_id: str,
     status: str = "generating",
     client: Client = supabase,
 ) -> dict:
-    """Insert a new book owned by the authenticated user."""
+    """Insert a new book."""
     result = (
         client.table("books")
-        .insert({"title": title, "notes": notes, "user_id": user_id, "status": status})
+        .insert({"title": title, "notes": notes, "status": status})
         .execute()
     )
     return result.data[0]
@@ -113,23 +112,6 @@ def get_chapter(chapter_id: str, client: Client = supabase) -> dict | None:
     return result.data[0] if result.data else None
 
 
-def get_book_chapter(
-    chapter_id: str,
-    book_id: str,
-    client: Client = supabase,
-) -> dict | None:
-    """Fetch a chapter by id constrained to a specific parent book."""
-    result = (
-        client.table("chapters")
-        .select("*")
-        .eq("id", chapter_id)
-        .eq("book_id", book_id)
-        .limit(1)
-        .execute()
-    )
-    return result.data[0] if result.data else None
-
-
 def list_book_chapters(book_id: str, client: Client = supabase) -> list[dict]:
     """List chapters for a visible book in chapter order."""
     result = (
@@ -170,54 +152,3 @@ def get_approved_chapters(book_id: str, client: Client = supabase) -> list[dict]
 def update_chapter(chapter_id: str, client: Client = supabase, **fields):
     """Update a chapter visible to the current caller."""
     client.table("chapters").update(fields).eq("id", chapter_id).execute()
-
-
-def create_book_share(
-    book_id: str,
-    shared_by: str,
-    shared_with: str | None = None,
-    share_token: str | None = None,
-    can_view: bool = True,
-    client: Client = supabase,
-) -> dict:
-    """Insert a share row for a visible book."""
-    payload = {
-        "book_id": book_id,
-        "shared_by": shared_by,
-        "shared_with": shared_with,
-        "share_token": share_token,
-        "can_view": can_view,
-    }
-    result = client.table("book_shares").insert(payload).execute()
-    return result.data[0]
-
-
-def get_book_share_by_token(
-    book_id: str,
-    share_token: str,
-    client: Client = supabase,
-) -> dict | None:
-    """Fetch a share row for a specific book/token pair."""
-    result = (
-        client.table("book_shares")
-        .select("*")
-        .eq("book_id", book_id)
-        .eq("share_token", share_token)
-        .eq("can_view", True)
-        .limit(1)
-        .execute()
-    )
-    return result.data[0] if result.data else None
-
-
-def get_share_by_token(share_token: str, client: Client = supabase) -> dict | None:
-    """Fetch a share row by token for public share-link access."""
-    result = (
-        client.table("book_shares")
-        .select("*")
-        .eq("share_token", share_token)
-        .eq("can_view", True)
-        .limit(1)
-        .execute()
-    )
-    return result.data[0] if result.data else None

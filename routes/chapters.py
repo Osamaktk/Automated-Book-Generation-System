@@ -1,22 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
-from supabase import Client
+from fastapi import APIRouter, HTTPException
 
 from ai import call_ai
-from config import create_rls_client, logger
+from config import logger, supabase
 from database import (
     get_approved_chapters,
     get_approved_outline,
     get_book,
-    get_book_chapter,
     get_chapter,
-    get_share_by_token,
     list_book_chapters,
     update_book_status,
     update_chapter,
 )
 from models import EditorFeedback
 from prompts import build_chapter_prompt, build_summary_prompt, extract_chapter_title
-from services.auth import AuthenticatedUser, get_current_user, get_optional_current_user
 from services.notifications import notify
 
 
@@ -31,40 +27,16 @@ def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
     ]
 
 
-def _build_user_client(current_user: AuthenticatedUser) -> Client:
-    """Create a request-scoped Supabase client for the authenticated user."""
-    return create_rls_client(current_user.access_token)
-
-
-def _require_owner(book: dict, current_user: AuthenticatedUser) -> None:
-    """Ensure the authenticated user owns the target book."""
-    if book.get("user_id") != current_user.user_id:
-        raise HTTPException(403, "Only the book owner can perform this action")
-
-
 @router.get("/books/{book_id}/chapters")
 async def list_chapters(
     book_id: str,
-    share: str | None = None,
-    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
 ):
     try:
-        if share:
-            public_client = create_rls_client()
-            share_row = get_share_by_token(share, client=public_client)
-            if not share_row or share_row["book_id"] != book_id:
-                raise HTTPException(404, "Share link not found")
-            client = public_client
-        else:
-            if not current_user:
-                raise HTTPException(401, "Authentication required")
-            client = _build_user_client(current_user)
-
-        book = get_book(book_id, client=client)
+        book = get_book(book_id, client=supabase)
         if not book:
             raise HTTPException(404, "Book not found")
 
-        chapters = list_book_chapters(book_id, client=client)
+        chapters = list_book_chapters(book_id, client=supabase)
         approved_count = sum(1 for chapter in chapters if chapter["status"] == "approved")
         return {
             "book_title": book["title"],
@@ -82,26 +54,9 @@ async def list_chapters(
 @router.get("/chapters/{chapter_id}")
 async def get_chapter_route(
     chapter_id: str,
-    share: str | None = None,
-    current_user: AuthenticatedUser | None = Depends(get_optional_current_user),
 ):
     try:
-        if share:
-            public_client = create_rls_client()
-            share_row = get_share_by_token(share, client=public_client)
-            if share_row:
-                chapter = get_book_chapter(
-                    chapter_id,
-                    share_row["book_id"],
-                    client=public_client,
-                )
-            else:
-                chapter = None
-        else:
-            if not current_user:
-                raise HTTPException(401, "Authentication required")
-            user_client = _build_user_client(current_user)
-            chapter = get_chapter(chapter_id, client=user_client)
+        chapter = get_chapter(chapter_id, client=supabase)
         if not chapter:
             raise HTTPException(404, "Chapter not found")
         return {"chapter": chapter}
@@ -116,26 +71,23 @@ async def get_chapter_route(
 async def submit_chapter_feedback(
     chapter_id: str,
     feedback: EditorFeedback,
-    current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        user_client = _build_user_client(current_user)
         if feedback.status not in {"approved", "needs_revision", "final_chapter"}:
             raise HTTPException(
                 400,
                 "Status must be 'approved', 'final_chapter', or 'needs_revision'",
             )
 
-        chapter = get_chapter(chapter_id, client=user_client)
+        chapter = get_chapter(chapter_id, client=supabase)
         if not chapter:
             raise HTTPException(404, "Chapter not found")
 
-        book = get_book(chapter["book_id"], client=user_client)
+        book = get_book(chapter["book_id"], client=supabase)
         if not book:
             raise HTTPException(404, "Book not found")
-        _require_owner(book, current_user)
 
-        outline = get_approved_outline(chapter["book_id"], client=user_client)
+        outline = get_approved_outline(chapter["book_id"], client=supabase)
         if not outline:
             raise HTTPException(404, "No approved outline found")
 
@@ -146,15 +98,13 @@ async def submit_chapter_feedback(
             )
             update_chapter(
                 chapter_id,
-                client=user_client,
+                client=supabase,
                 status="approved",
                 summary=summary,
                 editor_notes=feedback.editor_notes,
             )
             if feedback.status == "final_chapter":
-                update_book_status(
-                    chapter["book_id"], "chapters_complete", client=user_client
-                )
+                update_book_status(chapter["book_id"], "chapters_complete", client=supabase)
                 notify(
                     "book_complete",
                     book["title"],
@@ -171,7 +121,7 @@ async def submit_chapter_feedback(
                 "status": "approved",
             }
 
-        approved_chapters = get_approved_chapters(chapter["book_id"], client=user_client)
+        approved_chapters = get_approved_chapters(chapter["book_id"], client=supabase)
         previous_summaries = _build_previous_summaries(approved_chapters)
         chapter_title = extract_chapter_title(
             outline["content"], chapter["chapter_number"]
@@ -189,7 +139,7 @@ async def submit_chapter_feedback(
         )
         update_chapter(
             chapter_id,
-            client=user_client,
+            client=supabase,
             content=new_content,
             status="waiting_for_review",
             editor_notes=feedback.editor_notes,

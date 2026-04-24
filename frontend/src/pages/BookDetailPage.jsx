@@ -8,17 +8,11 @@ import Pipeline from "../components/shared/Pipeline";
 import StoryContextPanel from "../components/shared/StoryContextPanel";
 import Alert from "../components/ui/Alert";
 import Loader from "../components/ui/Loader";
-import ProtectedActionWrapper from "../components/ui/ProtectedActionWrapper";
 import StatusBadge from "../components/ui/StatusBadge";
-import { useGuestSession } from "../context/GuestStorageContext";
-import { useAuth } from "../hooks/useAuth";
 import { useBookDetail } from "../hooks/useBookDetail";
-import { useSyncOnLogin } from "../hooks/useSyncOnLogin";
 import {
-  createShareLink,
   downloadCompiledBook,
   generateChapterStream,
-  shareBookWithUser,
   submitOutlineFeedback
 } from "../services/bookService";
 import { getBookNotifications, getPipelineStage } from "../utils/book";
@@ -26,19 +20,13 @@ import { getBookNotifications, getPipelineStage } from "../utils/book";
 function BookDetailPage() {
   const navigate = useNavigate();
   const { bookId } = useParams();
-  const { accessToken, isAuthenticated } = useAuth();
-  const { submitOutlineFeedback: submitGuestOutlineFeedback, generateGuestChapter } = useGuestSession();
-  const { syncing, syncGuestBook } = useSyncOnLogin();
-  const { data, chapters, loading, error, reload, isGuestBook } = useBookDetail(bookId);
+  const { data, chapters, loading, error, reload } = useBookDetail(bookId);
   const [revNotes, setRevNotes] = useState("");
   const [showRev, setShowRev] = useState(false);
   const [message, setMessage] = useState(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [streamText, setStreamText] = useState("");
-  const [shareWith, setShareWith] = useState("");
-  const [shareLoading, setShareLoading] = useState(false);
-  const [shareUrl, setShareUrl] = useState("");
   const [downloadingFormat, setDownloadingFormat] = useState("");
 
   const book = data?.book;
@@ -60,7 +48,7 @@ function BookDetailPage() {
   const outlineApproved =
     outline?.status === "approved" ||
     ["outline_approved", "chapters_in_progress", "chapters_complete"].includes(book?.status);
-  const stage = getPipelineStage(book?.status, allChaptersApproved);
+  const stage = getPipelineStage(book?.status);
   const notifications = getBookNotifications(book, outline, chapters);
 
   async function handleOutlineFeedback(status) {
@@ -72,9 +60,7 @@ function BookDetailPage() {
     try {
       setFeedbackLoading(true);
       setMessage(null);
-      const response = isGuestBook
-        ? submitGuestOutlineFeedback(bookId, { status, editor_notes: revNotes })
-        : await submitOutlineFeedback(bookId, { status, editor_notes: revNotes }, accessToken);
+      const response = await submitOutlineFeedback(bookId, { status, editor_notes: revNotes });
       setMessage({ type: "success", text: response.message || "Outline updated." });
       setShowRev(false);
       setRevNotes("");
@@ -87,30 +73,12 @@ function BookDetailPage() {
   }
 
   async function handleGenerateChapter() {
-    if (isGuestBook) {
-      try {
-        setGenerating(true);
-        setMessage(null);
-        const chapter = generateGuestChapter(bookId);
-        setMessage({
-          type: "success",
-          text: `Chapter ${chapter.chapter_number} generated locally and is ready for review.`
-        });
-        await reload(false);
-      } catch (err) {
-        setMessage({ type: "error", text: err.message || "Unable to create local chapter." });
-      } finally {
-        setGenerating(false);
-      }
-      return;
-    }
-
     try {
       setGenerating(true);
       setStreamText("");
       setMessage(null);
 
-      await generateChapterStream(bookId, accessToken, async (event) => {
+      await generateChapterStream(bookId, undefined, async (event) => {
         if (event.type === "chunk") {
           setStreamText((current) => current + event.text);
         }
@@ -133,28 +101,10 @@ function BookDetailPage() {
     }
   }
 
-  async function syncCurrentBook() {
-    if (!isGuestBook) {
-      setMessage({ type: "success", text: "This book is already synced to your account." });
-      return bookId;
-    }
-
-    const result = await syncGuestBook(bookId);
-    if (result?.warning) {
-      setMessage({ type: "info", text: result.warning });
-    }
-    if (result?.remoteBookId) {
-      navigate(`/books/${result.remoteBookId}`, { replace: true });
-      return result.remoteBookId;
-    }
-    throw new Error("Unable to sync guest book.");
-  }
-
   async function handleDownload(format) {
     try {
       setDownloadingFormat(format);
-      const resolvedBookId = isGuestBook ? await syncCurrentBook() : bookId;
-      const { blob, filename } = await downloadCompiledBook(resolvedBookId, format, accessToken);
+      const { blob, filename } = await downloadCompiledBook(bookId, format);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -168,45 +118,6 @@ function BookDetailPage() {
       setMessage({ type: "error", text: err.message || "Unable to download manuscript." });
     } finally {
       setDownloadingFormat("");
-    }
-  }
-
-  async function handleShareUser() {
-    if (!shareWith.trim()) {
-      setMessage({ type: "error", text: "Enter the recipient user id." });
-      return;
-    }
-
-    try {
-      setShareLoading(true);
-      const resolvedBookId = isGuestBook ? await syncCurrentBook() : bookId;
-      const response = await shareBookWithUser(resolvedBookId, shareWith.trim(), accessToken);
-      setMessage({
-        type: "success",
-        text: response.message || "Book shared successfully."
-      });
-      setShareWith("");
-    } catch (err) {
-      setMessage({ type: "error", text: err.message || "Unable to share book." });
-    } finally {
-      setShareLoading(false);
-    }
-  }
-
-  async function handleCreateShareLink() {
-    try {
-      setShareLoading(true);
-      const resolvedBookId = isGuestBook ? await syncCurrentBook() : bookId;
-      const response = await createShareLink(resolvedBookId, accessToken);
-      setShareUrl(response.share_url || "");
-      setMessage({
-        type: "success",
-        text: response.message || "Share link created successfully."
-      });
-    } catch (err) {
-      setMessage({ type: "error", text: err.message || "Unable to create share link." });
-    } finally {
-      setShareLoading(false);
     }
   }
 
@@ -242,21 +153,10 @@ function BookDetailPage() {
       <div className="flex-between page-header">
         <div>
           <h2>{book.title}</h2>
-          {!isAuthenticated ? <div className="helper-text">Guest draft. Save or sync when you are ready.</div> : null}
-          {isGuestBook ? <div className="helper-text">This manuscript is stored locally until you sync it.</div> : null}
           <div className="top-status">
             <StatusBadge status={book.status} />
           </div>
           <div className="header-line" />
-        </div>
-        <div className="inline-actions">
-          <ProtectedActionWrapper action={syncCurrentBook} intent="Sign in to save this book to your account.">
-            {({ runAction }) => (
-              <button className="btn btn-gold" onClick={runAction} disabled={syncing}>
-                {syncing ? "Syncing..." : isGuestBook ? "Save Book" : "Sync Data"}
-              </button>
-            )}
-          </ProtectedActionWrapper>
         </div>
       </div>
 
@@ -348,43 +248,6 @@ function BookDetailPage() {
         <EditorNotesHistory items={chapterHistory} emptyText="No chapter feedback history yet" />
       </div>
 
-      <div className="card">
-        <div className="section-header">
-          <div className="card-title">Sharing</div>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Share with user id</label>
-          <input
-            className="form-input"
-            value={shareWith}
-            onChange={(event) => setShareWith(event.target.value)}
-            placeholder="Recipient user id"
-          />
-        </div>
-        <div className="inline-actions">
-          <ProtectedActionWrapper action={handleShareUser} intent="Sign in to share this book with another user.">
-            {({ runAction }) => (
-              <button className="btn btn-gold" onClick={runAction} disabled={shareLoading}>
-                Share With User
-              </button>
-            )}
-          </ProtectedActionWrapper>
-          <ProtectedActionWrapper action={handleCreateShareLink} intent="Sign in to create a shareable link.">
-            {({ runAction }) => (
-              <button className="btn btn-ghost" onClick={runAction} disabled={shareLoading}>
-                Generate Share Link
-              </button>
-            )}
-          </ProtectedActionWrapper>
-        </div>
-        {shareUrl ? (
-          <div className="share-banner mt-16">
-            <span>Share URL</span>
-            <div className="share-url">{shareUrl}</div>
-          </div>
-        ) : null}
-      </div>
-
       {(outlineApproved || isComplete || chapters.length > 0) ? (
         <div className="card">
           <div className="section-header">
@@ -406,27 +269,27 @@ function BookDetailPage() {
                   : "Generate the next chapter in sequence."}
           </div>
 
-          {(allChaptersApproved || isComplete) ? (
+          {isComplete ? (
             <div className="download-panel">
               <div className="download-panel-label">Download Final Manuscript</div>
               <div className="download-btns">
                 {["docx", "pdf", "txt"].map((format) => (
-                  <ProtectedActionWrapper
+                  <button
                     key={format}
-                    action={() => handleDownload(format)}
-                    intent={`Sign in to export this manuscript as ${format.toUpperCase()}.`}
+                    className="btn-download"
+                    onClick={() => handleDownload(format)}
+                    disabled={Boolean(downloadingFormat)}
                   >
-                    {({ runAction }) => (
-                      <button
-                        className="btn-download"
-                        onClick={runAction}
-                        disabled={Boolean(downloadingFormat)}
-                      >
-                        {downloadingFormat === format ? "Downloading..." : format.toUpperCase()}
-                      </button>
-                    )}
-                  </ProtectedActionWrapper>
+                    {downloadingFormat === format ? "Downloading..." : format.toUpperCase()}
+                  </button>
                 ))}
+              </div>
+            </div>
+          ) : allChaptersApproved ? (
+            <div className="download-panel">
+              <div className="download-panel-label">Final Approval Required</div>
+              <div className="helper-text">
+                Mark the last reviewed chapter as <strong>Final Chapter</strong> before exporting the manuscript.
               </div>
             </div>
           ) : null}
