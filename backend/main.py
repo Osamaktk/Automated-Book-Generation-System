@@ -1,9 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import APP_TITLE
-from routes.books import router as books_router
-from routes.chapters import router as chapters_router
+from backend.config import APP_TITLE
+from backend.routes.books import router as books_router
+from backend.routes.chapters import router as chapters_router
 
 
 app = FastAPI(title=APP_TITLE)

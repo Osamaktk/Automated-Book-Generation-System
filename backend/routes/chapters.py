@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 
-from ai import call_ai
-from config import logger, supabase
-from database import (
+from backend.ai import call_ai
+from backend.config import logger, supabase
+from backend.database import (
     get_approved_chapters,
     get_approved_outline,
     get_book,
@@ -11,14 +11,14 @@ from database import (
     update_book_status,
     update_chapter,
 )
-from models import EditorFeedback
-from prompts import (
+from backend.models import EditorFeedback
+from backend.prompts import (
     build_chapter_prompt,
     build_summary_prompt,
     count_outline_chapters,
     extract_chapter_title,
 )
-from services.notifications import notify
+from backend.services.notifications import notify
 
 
 router = APIRouter(tags=["chapters"])

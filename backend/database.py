@@ -1,6 +1,6 @@
 from supabase import Client
 
-from config import supabase
+from backend.config import supabase
 
 
 def create_book(

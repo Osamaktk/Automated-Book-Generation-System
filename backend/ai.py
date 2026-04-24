@@ -1,6 +1,6 @@
 import asyncio
 
-from config import FALLBACK_MODEL, PRIMARY_MODEL, logger, openrouter_client
+from backend.config import FALLBACK_MODEL, PRIMARY_MODEL, logger, openrouter_client
 
 
 def call_ai(prompt: str, max_tokens: int = 2000) -> str:

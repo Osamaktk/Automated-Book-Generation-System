@@ -13,7 +13,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
-from prompts import extract_chapter_title
+from backend.prompts import extract_chapter_title
 
 
 logger = logging.getLogger(__name__)

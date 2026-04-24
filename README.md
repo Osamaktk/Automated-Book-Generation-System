@@ -60,7 +60,7 @@ VITE_API_URL=http://127.0.0.1:8000
 ## Local Run
 
 1. Install backend dependencies from `requirements.txt`
-2. Start the API with `uvicorn main:app --reload`
+2. Start the API with `uvicorn backend.main:app --reload`
 3. In `frontend/`, run `npm install`
 4. Run `npm run dev`
 
@@ -71,7 +71,7 @@ VITE_API_URL=http://127.0.0.1:8000
 3. Approve the outline or request revision.
 4. Generate chapters one by one.
 5. Approve each chapter or request revision.
-6. Mark the last approved chapter as `Final Chapter`.
+6. When the last planned chapter is approved, the system automatically marks the book as complete.
 7. Export the completed manuscript.
 
 ## Spreadsheet Import

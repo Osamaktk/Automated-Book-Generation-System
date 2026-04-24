@@ -8,9 +8,9 @@ from fastapi.responses import StreamingResponse
 from openpyxl import load_workbook
 from supabase import Client
 
-from ai import call_ai, stream_ai_async
-from config import logger, supabase
-from database import (
+from backend.ai import call_ai, stream_ai_async
+from backend.config import logger, supabase
+from backend.database import (
     create_book,
     create_chapter,
     create_outline,
@@ -23,10 +23,10 @@ from database import (
     update_book_status,
     update_outline,
 )
-from models import BookInput, EditorFeedback
-from prompts import build_chapter_prompt, build_outline_prompt, extract_chapter_title
-from services.compiler import compile_to_docx, compile_to_pdf, compile_to_txt
-from services.notifications import notify
+from backend.models import BookInput, EditorFeedback
+from backend.prompts import build_chapter_prompt, build_outline_prompt, extract_chapter_title
+from backend.services.compiler import compile_to_docx, compile_to_pdf, compile_to_txt
+from backend.services.notifications import notify
 
 
 router = APIRouter(prefix="/books", tags=["books"])

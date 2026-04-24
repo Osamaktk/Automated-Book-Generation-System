@@ -16,6 +16,12 @@ VITE_API_URL=http://127.0.0.1:8000
 2. Run `npm run dev`
 3. Open the Vite URL in your browser
 
+The frontend expects the API to be running from the project root with:
+
+```powershell
+uvicorn backend.main:app --reload
+```
+
 ## Routes
 
 - `/dashboard`
@@ -28,5 +34,5 @@ VITE_API_URL=http://127.0.0.1:8000
 - Review or revise the generated outline
 - Generate chapters sequentially
 - Review each chapter and request revisions when needed
-- Mark the last chapter as `Final Chapter`
+- Approve the planned chapters until the book is automatically marked complete
 - Download the completed manuscript after final approval
