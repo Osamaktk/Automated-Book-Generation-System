@@ -4,6 +4,7 @@ from typing import Iterable
 
 def extract_requested_chapter_limit(notes: str, editor_notes: str = "") -> int | None:
     text = f"{notes}\n{editor_notes}".lower()
+    text = text.replace("exeed", "exceed").replace("excede", "exceed")
     patterns = [
         r"do not exceed\s+(\d+)\s+(\d+)\s+chapters",
         r"do not exceed\s+(\d+)\s*[-to]+\s*(\d+)\s+chapters",
@@ -34,6 +35,21 @@ def extract_requested_chapter_limit(notes: str, editor_notes: str = "") -> int |
     return None
 
 
+def resolve_planned_chapter_count(
+    notes: str,
+    outline_content: str,
+    editor_notes: str = "",
+) -> int:
+    requested_limit = extract_requested_chapter_limit(notes, editor_notes)
+    outline_limit = count_outline_chapters(outline_content)
+
+    if requested_limit and outline_limit:
+        return min(requested_limit, outline_limit)
+    if requested_limit:
+        return requested_limit
+    return outline_limit
+
+
 def _editor_requests_ending(editor_notes: str) -> bool:
     if not editor_notes:
         return False
@@ -55,9 +71,9 @@ def build_outline_prompt(title: str, notes: str, editor_notes: str = "") -> str:
     revision_context = f"\n\nEDITOR FEEDBACK:\n{editor_notes}" if editor_notes else ""
     chapter_limit = extract_requested_chapter_limit(notes, editor_notes)
     chapter_instruction = (
-        f"2. List of chapters (exactly {chapter_limit}) with:"
+        f"2. List exactly {chapter_limit} chapters with:"
         if chapter_limit
-        else "2. List of chapters (at least 5) with:"
+        else "2. List the planned chapters with:"
     )
     limit_guard = (
         f"\nImportant: The notes request a short structure. Do not exceed {chapter_limit} chapters."
@@ -65,19 +81,30 @@ def build_outline_prompt(title: str, notes: str, editor_notes: str = "") -> str:
         else ""
     )
     return f"""You are a professional book author and editor.
-Generate a detailed book outline for the following:
+Generate a clean working outline for the following book project.
 
 TITLE: {title}
 AUTHOR NOTES: {notes}{revision_context}
 {limit_guard}
 
-Your outline must include:
-1. A brief book description (2-3 sentences)
+Requirements:
+1. Write a brief book description in 2-3 sentences.
 {chapter_instruction}
-   - Chapter number and title
-   - A 2-3 sentence description of what happens in that chapter
+   - Give each chapter a clear title.
+   - Give each chapter a 2-3 sentence description of what happens.
+3. Respect every structural limit in the notes exactly.
+4. Do not add any introduction, explanation, apology, markdown bullets, or closing question.
+5. Do not include sections like "Notes & Considerations", "Would you like me to...", or anything outside the outline itself.
 
-Format it cleanly and professionally."""
+Output format:
+Book Description:
+[2-3 sentences]
+
+Chapter 1: [Title]
+[2-3 sentence description]
+
+Chapter 2: [Title]
+[2-3 sentence description]"""
 
 
 def build_chapter_prompt(
@@ -107,6 +134,11 @@ def build_chapter_prompt(
             "\n- This chapter should function as an ending. Resolve the main conflict, "
             "close the most important character arcs, and finish with a satisfying conclusion."
         )
+    last_line_instruction = (
+        "- End with a natural turning point that leads into the next chapter."
+        if not ending_instruction
+        else "- End decisively. Do not leave the main story unresolved."
+    )
     return f"""You are a professional novelist writing a book called "{title}".
 
 FULL BOOK OUTLINE:
@@ -119,7 +151,8 @@ Instructions:
 - Write a full, engaging chapter (minimum 800 words)
 - Stay consistent with characters, plot, and tone from previous chapters
 - Use vivid descriptions and natural dialogue
-- End in a way that makes the reader want to continue
+- Write only the chapter prose. Do not include markdown headings, commentary, or notes to the editor.
+{last_line_instruction}
 {ending_instruction}
 
 Write the chapter now:"""
@@ -138,10 +171,25 @@ Write only the summary:"""
 def extract_chapter_title(outline_content: str, chapter_number: int) -> str:
     fallback_title = f"Chapter {chapter_number}"
     for line in outline_content.splitlines():
-        if f"Chapter {chapter_number}" in line or f"**{chapter_number}." in line:
-            clean_line = line.replace("**", "").replace("*", "").strip()
-            if clean_line:
-                return clean_line
+        clean_line = line.replace("**", "").replace("*", "").strip()
+        chapter_match = re.match(
+            rf"^chapter\s+{chapter_number}\s*[:.-]\s*(.+)$",
+            clean_line,
+            flags=re.IGNORECASE,
+        )
+        if chapter_match:
+            title = chapter_match.group(1).strip(" -")
+            if title:
+                return title
+        numbered_match = re.match(
+            rf"^{chapter_number}\.\s+(.+)$",
+            clean_line,
+            flags=re.IGNORECASE,
+        )
+        if numbered_match:
+            title = numbered_match.group(1).strip(" -")
+            if title:
+                return title
     return fallback_title
 
 

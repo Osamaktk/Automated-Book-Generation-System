@@ -10,7 +10,7 @@ Automated book generation system with a human-in-the-loop editorial workflow.
 - Generate chapters sequentially using summaries of approved earlier chapters
 - Approve, revise, or mark the last chapter as the final chapter
 - Send optional SMTP or Microsoft Teams notifications
-- Export the final manuscript as `docx`, `pdf`, or `txt` only after final approval
+- Export the final manuscript as `docx` or `pdf` only after final approval
 
 ## Stack
 

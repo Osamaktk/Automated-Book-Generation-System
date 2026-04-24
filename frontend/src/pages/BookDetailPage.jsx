@@ -31,6 +31,7 @@ function BookDetailPage() {
 
   const book = data?.book;
   const outline = data?.outline;
+  const plannedChapterCount = book?.planned_chapter_count || 0;
 
   const approvedCount = useMemo(
     () => chapters.filter((chapter) => chapter.status === "approved").length,
@@ -41,8 +42,11 @@ function BookDetailPage() {
     [chapters]
   );
   const allChaptersApproved = useMemo(
-    () => chapters.length > 0 && chapters.every((chapter) => chapter.status === "approved"),
-    [chapters]
+    () =>
+      plannedChapterCount > 0
+        ? approvedCount >= plannedChapterCount
+        : chapters.length > 0 && chapters.every((chapter) => chapter.status === "approved"),
+    [approvedCount, chapters, plannedChapterCount]
   );
   const isComplete = book?.status === "chapters_complete";
   const outlineApproved =
@@ -137,13 +141,31 @@ function BookDetailPage() {
     }));
 
   const canGenerate =
-    outlineApproved && !pendingChapter && !isComplete && !generating && !feedbackLoading;
-  const progressPercent = chapters.length ? Math.round((approvedCount / chapters.length) * 100) : 0;
+    outlineApproved &&
+    !pendingChapter &&
+    !isComplete &&
+    !generating &&
+    !feedbackLoading &&
+    (plannedChapterCount === 0 || approvedCount < plannedChapterCount);
+  const progressPercent = plannedChapterCount
+    ? Math.min(100, Math.round((approvedCount / plannedChapterCount) * 100))
+    : chapters.length
+      ? Math.round((approvedCount / chapters.length) * 100)
+      : 0;
 
   return (
     <div className="fade-up">
-      <div className="back-btn" onClick={() => navigate("/dashboard")}>
-        Back to Library
+      <div className="top-actions">
+        <button className="btn btn-ghost" onClick={() => navigate("/dashboard")} type="button">
+          Dashboard
+        </button>
+        <button
+          className="btn btn-gold"
+          onClick={() => navigate("/dashboard?tab=create")}
+          type="button"
+        >
+          New Book
+        </button>
       </div>
 
       {message ? <Alert type={message.type}>{message.text}</Alert> : null}
@@ -156,14 +178,18 @@ function BookDetailPage() {
           <div className="top-status">
             <StatusBadge status={book.status} />
           </div>
+          <p className="page-subcopy">
+            Review the outline, guide revisions, and publish the final manuscript once the planned
+            chapters are approved.
+          </p>
           <div className="header-line" />
         </div>
       </div>
 
       <div className="stats-row">
         <div className="stat-card">
-          <div className="stat-value">{chapters.length}</div>
-          <div className="stat-label">Generated</div>
+          <div className="stat-value">{plannedChapterCount || chapters.length}</div>
+          <div className="stat-label">{plannedChapterCount ? "Planned" : "Generated"}</div>
         </div>
         <div className="stat-card">
           <div className="stat-value">{approvedCount}</div>
@@ -179,7 +205,7 @@ function BookDetailPage() {
         <div className="progress-label">
           <span>MANUSCRIPT PROGRESS</span>
           <span>
-            {approvedCount} of {chapters.length} chapters approved
+            {approvedCount} of {plannedChapterCount || chapters.length} chapters approved
           </span>
         </div>
         <div className="progress-wrap">
@@ -266,14 +292,16 @@ function BookDetailPage() {
                 ? `Approve Chapter ${pendingChapter.chapter_number} before generating the next chapter.`
                 : isComplete
                   ? "This book has already been completed. Download options are available below."
-                  : "Generate the next chapter in sequence."}
+                  : plannedChapterCount
+                    ? `Generate the next chapter in sequence. Planned total: ${plannedChapterCount}.`
+                    : "Generate the next chapter in sequence."}
           </div>
 
           {isComplete ? (
             <div className="download-panel">
               <div className="download-panel-label">Download Final Manuscript</div>
               <div className="download-btns">
-                {["docx", "pdf", "txt"].map((format) => (
+                {["docx", "pdf"].map((format) => (
                   <button
                     key={format}
                     className="btn-download"

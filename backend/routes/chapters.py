@@ -15,8 +15,8 @@ from backend.models import EditorFeedback
 from backend.prompts import (
     build_chapter_prompt,
     build_summary_prompt,
-    count_outline_chapters,
     extract_chapter_title,
+    resolve_planned_chapter_count,
 )
 from backend.services.notifications import notify
 
@@ -110,7 +110,11 @@ async def submit_chapter_feedback(
             )
 
             approved_chapters = get_approved_chapters(chapter["book_id"], client=supabase)
-            planned_chapter_count = count_outline_chapters(outline["content"])
+            planned_chapter_count = resolve_planned_chapter_count(
+                book.get("notes", ""),
+                outline.get("content", ""),
+                feedback.editor_notes,
+            )
             is_complete = feedback.status == "final_chapter" or (
                 planned_chapter_count > 0
                 and len(approved_chapters) >= planned_chapter_count

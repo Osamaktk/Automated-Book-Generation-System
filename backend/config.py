@@ -34,8 +34,13 @@ OPENROUTER_HEADERS = {
     "X-Title": "AutoBook",
 }
 
-PRIMARY_MODEL = "mistralai/mistral-small-3.1-24b-instruct:free"
-FALLBACK_MODEL = "openrouter/free"
+MODEL_CANDIDATES = [
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "deepseek/deepseek-chat-v3-0324:free",
+    "mistralai/mistral-small-3.1-24b-instruct",
+    "qwen/qwen-2.5-7b-instruct",
+    "google/gemma-2-9b-it",
+]
 _openrouter_client: OpenAI | None = None
 
 
@@ -91,7 +96,7 @@ def get_openrouter_client() -> OpenAI:
             base_url=OPENROUTER_BASE_URL,
             default_headers=OPENROUTER_HEADERS,
         )
-        logger.info("OpenRouter connected, primary model: %s", PRIMARY_MODEL)
+        logger.info("OpenRouter connected, model order: %s", ", ".join(MODEL_CANDIDATES))
         _openrouter_client = client
         return _openrouter_client
     except Exception as exc:

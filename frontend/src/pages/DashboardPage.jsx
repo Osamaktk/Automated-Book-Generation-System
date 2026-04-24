@@ -82,11 +82,12 @@ function DashboardPage() {
   return (
     <div className="fade-up">
       <div className="page-header">
+        <div className="page-header-kicker">Editorial Studio</div>
         <h2>{tab === "create" ? "Create New Book" : "Library Dashboard"}</h2>
-        <p>
+        <p className="page-subcopy">
           {tab === "create"
             ? "Turn a title and a brief into a review-ready outline."
-            : "Manage your active manuscripts, reviews, and completed books."}
+            : "Track active manuscripts, review milestones, and final publication files in one place."}
         </p>
         <div className="header-line" />
       </div>

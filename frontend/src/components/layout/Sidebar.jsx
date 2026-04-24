@@ -10,11 +10,13 @@ function Sidebar() {
 
   return (
     <nav className="sidebar">
-      <div className="sidebar-logo">
+      <Link className="sidebar-logo sidebar-home-link" to="/dashboard">
         <div className="logo-icon">AB</div>
-        <h1>AutoBook</h1>
-        <p>AI Publishing System</p>
-      </div>
+        <div>
+          <h1>AutoBook</h1>
+          <p>AI Publishing System</p>
+        </div>
+      </Link>
 
       <div className="sidebar-nav">
         <div className="nav-section-label">Workspace</div>

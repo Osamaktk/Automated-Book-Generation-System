@@ -1,19 +1,19 @@
 @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap");
 
 :root {
-  --bg: #080808;
-  --surface: #111111;
-  --surface2: #191919;
-  --surface3: #202020;
-  --border: #252525;
-  --border2: #2f2f2f;
-  --gold: #d4a843;
-  --gold2: #e8c46a;
-  --gold-dim: #7a5e22;
-  --gold-glow: rgba(212, 168, 67, 0.12);
-  --cream: #ede0cc;
-  --muted: #5a5a5a;
-  --muted2: #7a7a7a;
+  --bg: #0a0d12;
+  --surface: #11161e;
+  --surface2: #171d27;
+  --surface3: #202734;
+  --border: #222a35;
+  --border2: #313b49;
+  --gold: #e2a43a;
+  --gold2: #ffd38a;
+  --gold-dim: #95661c;
+  --gold-glow: rgba(226, 164, 58, 0.14);
+  --cream: #f4ebdc;
+  --muted: #667287;
+  --muted2: #9aa7b7;
   --success2: #4dbf87;
   --warn: #c98540;
   --danger: #e07070;
@@ -34,7 +34,10 @@ html {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at top left, rgba(226, 164, 58, 0.12), transparent 28%),
+    radial-gradient(circle at top right, rgba(95, 127, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, #0b0e13 0%, #080a0e 100%);
   color: var(--cream);
   font-family: "DM Sans", sans-serif;
   min-height: 100vh;
@@ -68,6 +71,9 @@ textarea {
   width: calc(100% - 240px);
   margin-left: 240px;
   padding: 48px 52px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 220px),
+    transparent;
 }
 
 .fade-up {
@@ -91,10 +97,13 @@ textarea {
   width: 240px;
   min-height: 100vh;
   min-height: 100dvh;
-  background: linear-gradient(180deg, #0f0f0f 0%, #0a0a0a 100%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 30%),
+    linear-gradient(180deg, #0f1319 0%, #0a0d12 100%);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar-logo,
@@ -104,6 +113,9 @@ textarea {
 
 .sidebar-logo {
   border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  display: block;
 }
 
 .logo-icon {
@@ -131,6 +143,10 @@ textarea {
   font-size: 10px;
   letter-spacing: 2px;
   text-transform: uppercase;
+}
+
+.sidebar-home-link:hover .logo-icon {
+  box-shadow: 0 12px 28px rgba(226, 164, 58, 0.24);
 }
 
 .sidebar-nav {
@@ -226,6 +242,7 @@ textarea {
 .btn-gold {
   background: linear-gradient(135deg, var(--gold), #b8922e);
   color: #0d0a00;
+  box-shadow: 0 14px 26px rgba(149, 102, 28, 0.24);
 }
 
 .btn-success {
@@ -242,7 +259,7 @@ textarea {
 .btn-logout,
 .btn-download,
 .tab-button {
-  background: var(--surface2);
+  background: rgba(255, 255, 255, 0.02);
   color: var(--cream);
   border: 1px solid var(--border2);
 }
@@ -268,7 +285,7 @@ textarea {
 .page-header h2 {
   margin: 0;
   font-family: "Cormorant Garamond", serif;
-  font-size: 38px;
+  font-size: 42px;
   line-height: 0.98;
 }
 
@@ -277,11 +294,24 @@ textarea {
   margin-top: 8px;
 }
 
+.page-header-kicker {
+  color: var(--gold2);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2.8px;
+  margin-bottom: 10px;
+}
+
+.page-subcopy {
+  max-width: 720px;
+}
+
 .header-line {
-  width: 42px;
-  height: 2px;
-  background: linear-gradient(90deg, var(--gold), transparent);
+  width: 58px;
+  height: 3px;
+  background: linear-gradient(90deg, var(--gold), rgba(226, 164, 58, 0));
   margin-top: 14px;
+  border-radius: 999px;
 }
 
 .top-status {
@@ -317,6 +347,7 @@ textarea {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.16);
 }
 
 .card,
@@ -344,7 +375,7 @@ textarea {
 .book-card:hover {
   transform: translateY(-3px);
   border-color: rgba(212, 168, 67, 0.4);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 28px 50px rgba(0, 0, 0, 0.28);
 }
 
 .book-card-spine {
@@ -401,7 +432,9 @@ textarea {
 }
 
 .content-box {
-  background: var(--surface2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 100%),
+    var(--surface2);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 22px 26px;
@@ -632,8 +665,10 @@ textarea {
 .download-panel {
   padding: 18px;
   border-radius: 12px;
-  border: 1px solid rgba(212, 168, 67, 0.25);
-  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid rgba(226, 164, 58, 0.25);
+  background:
+    linear-gradient(135deg, rgba(226, 164, 58, 0.12), rgba(226, 164, 58, 0.03)),
+    rgba(226, 164, 58, 0.05);
 }
 
 .tab-switch {
@@ -673,6 +708,14 @@ textarea {
 
 .back-btn::before {
   content: "<";
+}
+
+.top-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
 }
 
 .align-center {
@@ -783,6 +826,10 @@ textarea {
 
   .page-header h2 {
     font-size: 32px;
+  }
+
+  .top-actions {
+    margin-bottom: 16px;
   }
 
   .card,
@@ -900,6 +947,11 @@ textarea {
   .back-btn {
     margin-bottom: 20px;
     font-size: 12px;
+  }
+
+  .top-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 }
 

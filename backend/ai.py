@@ -1,37 +1,36 @@
 import asyncio
 
-from backend.config import FALLBACK_MODEL, PRIMARY_MODEL, get_openrouter_client, logger
+from backend.config import MODEL_CANDIDATES, get_openrouter_client, logger
+
+
+def _create_completion(prompt: str, model_name: str, max_tokens: int):
+    openrouter_client = get_openrouter_client()
+    return openrouter_client.chat.completions.create(
+        model=model_name,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        timeout=90,
+    )
 
 
 def call_ai(prompt: str, max_tokens: int = 2000) -> str:
-    try:
-        openrouter_client = get_openrouter_client()
-        response = openrouter_client.chat.completions.create(
-            model=PRIMARY_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=max_tokens,
-            timeout=90,
-        )
-        return response.choices[0].message.content
-    except Exception as exc:
-        logger.warning(
-            "Primary model %s failed: %s. Falling back to %s.",
-            PRIMARY_MODEL,
-            exc,
-            FALLBACK_MODEL,
-        )
+    last_error = None
+    for index, model_name in enumerate(MODEL_CANDIDATES):
         try:
-            openrouter_client = get_openrouter_client()
-            response = openrouter_client.chat.completions.create(
-                model=FALLBACK_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                timeout=90,
-            )
+            response = _create_completion(prompt, model_name, max_tokens)
             return response.choices[0].message.content
-        except Exception as fallback_exc:
-            logger.error("Fallback model also failed: %s", fallback_exc)
-            raise fallback_exc
+        except Exception as exc:
+            last_error = exc
+            if index < len(MODEL_CANDIDATES) - 1:
+                logger.warning(
+                    "OpenRouter model %s failed: %s. Trying %s next.",
+                    model_name,
+                    exc,
+                    MODEL_CANDIDATES[index + 1],
+                )
+            else:
+                logger.error("All OpenRouter models failed. Last error: %s", exc)
+    raise last_error or RuntimeError("No OpenRouter models configured")
 
 
 async def stream_ai_async(prompt: str, max_tokens: int = 2000):
@@ -54,19 +53,28 @@ async def stream_ai_async(prompt: str, max_tokens: int = 2000):
 
     def run_stream():
         try:
-            enqueue_stream(PRIMARY_MODEL)
-        except Exception as exc:
-            logger.warning(
-                "Primary model stream %s failed: %s. Falling back to %s.",
-                PRIMARY_MODEL,
-                exc,
-                FALLBACK_MODEL,
-            )
-            try:
-                enqueue_stream(FALLBACK_MODEL)
-            except Exception as fallback_exc:
+            last_error = None
+            for index, model_name in enumerate(MODEL_CANDIDATES):
+                try:
+                    enqueue_stream(model_name)
+                    last_error = None
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    if index < len(MODEL_CANDIDATES) - 1:
+                        logger.warning(
+                            "OpenRouter stream model %s failed: %s. Trying %s next.",
+                            model_name,
+                            exc,
+                            MODEL_CANDIDATES[index + 1],
+                        )
+                    else:
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait, f"__ERROR__:{exc}"
+                        )
+            if last_error and len(MODEL_CANDIDATES) == 0:
                 loop.call_soon_threadsafe(
-                    queue.put_nowait, f"__ERROR__:{fallback_exc}"
+                    queue.put_nowait, "__ERROR__:No OpenRouter models configured"
                 )
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)

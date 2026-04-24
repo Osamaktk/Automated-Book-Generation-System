@@ -27,10 +27,10 @@ from backend.models import BookInput, EditorFeedback
 from backend.prompts import (
     build_chapter_prompt,
     build_outline_prompt,
-    count_outline_chapters,
+    resolve_planned_chapter_count,
     extract_chapter_title,
 )
-from backend.services.compiler import compile_to_docx, compile_to_pdf, compile_to_txt
+from backend.services.compiler import compile_to_docx, compile_to_pdf
 from backend.services.notifications import notify
 
 
@@ -54,7 +54,10 @@ def _sync_book_completion(book: dict, client: Client) -> dict:
     if not outline:
         return book
 
-    planned_chapter_count = count_outline_chapters(outline.get("content", ""))
+    planned_chapter_count = resolve_planned_chapter_count(
+        book.get("notes", ""),
+        outline.get("content", ""),
+    )
     approved_chapters = get_approved_chapters(book["id"], client=client)
     if (
         planned_chapter_count > 0
@@ -64,6 +67,17 @@ def _sync_book_completion(book: dict, client: Client) -> dict:
         update_book_status(book["id"], "chapters_complete", client=client)
         return {**book, "status": "chapters_complete"}
     return book
+
+
+def _with_planned_chapter_count(book: dict, outline: dict | None) -> dict:
+    if not outline:
+        return {**book, "planned_chapter_count": 0}
+    planned_chapter_count = resolve_planned_chapter_count(
+        book.get("notes", ""),
+        outline.get("content", ""),
+        outline.get("editor_notes", ""),
+    )
+    return {**book, "planned_chapter_count": planned_chapter_count}
 
 
 def _normalize_header(value: str) -> str:
@@ -151,7 +165,10 @@ def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
         )
 
     approved_chapters = get_approved_chapters(book["id"], client=client)
-    planned_chapter_count = count_outline_chapters(outline.get("content", ""))
+    planned_chapter_count = resolve_planned_chapter_count(
+        book.get("notes", ""),
+        outline.get("content", ""),
+    )
     if planned_chapter_count > 0 and len(approved_chapters) >= planned_chapter_count:
         update_book_status(book["id"], "chapters_complete", client=client)
         raise HTTPException(
@@ -349,6 +366,13 @@ async def list_books_route():
             _sync_book_completion(book, supabase)
             for book in list_books(client=supabase)
         ]
+        books = [
+            _with_planned_chapter_count(
+                book,
+                get_latest_outline(book["id"], client=supabase),
+            )
+            for book in books
+        ]
         return {"books": books}
     except Exception as exc:
         logger.error("List books failed: %s", exc, exc_info=True)
@@ -364,7 +388,9 @@ async def get_book_route(
         if not book:
             raise HTTPException(404, "Book not found")
         book = _sync_book_completion(book, supabase)
-        return {"book": book, "outline": get_latest_outline(book_id, client=supabase)}
+        outline = get_latest_outline(book_id, client=supabase)
+        book = _with_planned_chapter_count(book, outline)
+        return {"book": book, "outline": outline}
     except HTTPException:
         raise
     except Exception as exc:
@@ -495,8 +521,8 @@ async def compile_book_route(
     format: str = "docx",
 ):
     try:
-        if format not in {"docx", "pdf", "txt"}:
-            raise HTTPException(400, "Format must be one of: docx, pdf, txt")
+        if format not in {"docx", "pdf"}:
+            raise HTTPException(400, "Format must be one of: docx, pdf")
 
         book = get_book(book_id, client=supabase)
         if not book:
@@ -550,14 +576,6 @@ async def compile_book_route(
                 media_type="application/pdf",
                 headers=headers,
             )
-
-        content = compile_to_txt(book, outline, approved_chapters)
-        logger.info("Compiled TXT document for book %s", book_id)
-        return StreamingResponse(
-            iter([content]),
-            media_type="text/plain",
-            headers=headers,
-        )
     except HTTPException:
         raise
     except Exception as exc:
@@ -603,6 +621,19 @@ async def generate_chapter_stream(
                 return
 
             approved_chapters = get_approved_chapters(book_id, client=supabase)
+            planned_chapter_count = resolve_planned_chapter_count(
+                book.get("notes", ""),
+                outline.get("content", ""),
+            )
+            if planned_chapter_count > 0 and len(approved_chapters) >= planned_chapter_count:
+                update_book_status(book_id, "chapters_complete", client=supabase)
+                yield _serialize_event(
+                    {
+                        "type": "error",
+                        "message": "All planned chapters are already complete for this book.",
+                    }
+                )
+                return
             next_number = len(approved_chapters) + 1
             chapter_title = extract_chapter_title(outline["content"], next_number)
             previous_summaries = _build_previous_summaries(approved_chapters)
