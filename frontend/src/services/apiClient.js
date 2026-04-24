@@ -1,3 +1,5 @@
+import { supabase } from "../lib/supabase";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 function buildUrl(path) {
@@ -12,10 +14,22 @@ async function parsePayload(response) {
   }
 }
 
+async function resolveAccessToken(accessToken) {
+  if (accessToken) {
+    return accessToken;
+  }
+
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+  return session?.access_token || null;
+}
+
 export async function request(path, { accessToken, headers, ...options } = {}) {
   const nextHeaders = { ...(headers || {}) };
-  if (accessToken) {
-    nextHeaders.Authorization = `Bearer ${accessToken}`;
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (resolvedAccessToken) {
+    nextHeaders.Authorization = `Bearer ${resolvedAccessToken}`;
   }
 
   const response = await fetch(buildUrl(path), { ...options, headers: nextHeaders });
@@ -46,8 +60,9 @@ export async function sharedRequest(path, shareToken) {
 
 export async function streamRequest(path, { accessToken, method = "POST", body } = {}) {
   const headers = { "Content-Type": "application/json" };
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (resolvedAccessToken) {
+    headers.Authorization = `Bearer ${resolvedAccessToken}`;
   }
 
   const response = await fetch(buildUrl(path), {
@@ -68,8 +83,9 @@ export async function streamRequest(path, { accessToken, method = "POST", body }
 
 export async function downloadRequest(path, { accessToken } = {}) {
   const headers = {};
-  if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+  const resolvedAccessToken = await resolveAccessToken(accessToken);
+  if (resolvedAccessToken) {
+    headers.Authorization = `Bearer ${resolvedAccessToken}`;
   }
 
   const response = await fetch(buildUrl(path), { headers });

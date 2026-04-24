@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import BookCard from "../components/books/BookCard";
 import Alert from "../components/ui/Alert";
 import Loader from "../components/ui/Loader";
+import { useGuestSession } from "../context/GuestStorageContext";
 import { useAuth } from "../hooks/useAuth";
 import { useBooks } from "../hooks/useBooks";
 import { createBookStream } from "../services/bookService";
@@ -12,7 +13,8 @@ import { isDraft } from "../utils/book";
 function DashboardPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { accessToken } = useAuth();
+  const { accessToken, isAuthenticated } = useAuth();
+  const { createGuestBook } = useGuestSession();
   const { books, loading, error, removeBook, reload } = useBooks();
   const [deletingId, setDeletingId] = useState("");
   const [message, setMessage] = useState(null);
@@ -51,6 +53,18 @@ function DashboardPage() {
       setCreating(true);
       setStreaming("");
       setMessage(null);
+
+      if (!isAuthenticated) {
+        const bundle = createGuestBook({ title: title.trim(), notes: notes.trim() });
+        setStreaming(bundle.outline.content);
+        setMessage({
+          type: "info",
+          text: "Guest draft created locally. Sign in later when you want to save or export it."
+        });
+        navigate(`/books/${bundle.book.id}`);
+        return;
+      }
+
       let nextBookId = null;
 
       await createBookStream({ title: title.trim(), notes: notes.trim() }, accessToken, (event) => {
@@ -86,7 +100,7 @@ function DashboardPage() {
         <h2>{tab === "create" ? "Create New Book" : "Library Dashboard"}</h2>
         <p>
           {tab === "create"
-            ? "Turn a title and a brief into a review-ready outline."
+            ? "Turn a title and a brief into a review-ready outline. Guest drafts stay local until you save them."
             : "Manage your active manuscripts, reviews, and completed books."}
         </p>
         <div className="header-line" />

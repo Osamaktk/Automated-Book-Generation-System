@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useState } from "react";
+import { createContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "../lib/supabase";
 
@@ -6,6 +6,9 @@ export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authIntent, setAuthIntent] = useState("");
+  const pendingActionRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -35,10 +38,29 @@ export function AuthProvider({ children }) {
       accessToken: session?.access_token ?? null,
       isAuthenticated: Boolean(session?.user),
       isLoading: session === undefined,
+      authModalOpen,
+      authIntent,
+      openAuthModal(action, intent = "Sign in to continue this action.") {
+        pendingActionRef.current = action || null;
+        setAuthIntent(intent);
+        setAuthModalOpen(true);
+      },
+      closeAuthModal() {
+        pendingActionRef.current = null;
+        setAuthIntent("");
+        setAuthModalOpen(false);
+      },
       async signIn(email, password) {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
           throw error;
+        }
+        setAuthModalOpen(false);
+        setAuthIntent("");
+        const pendingAction = pendingActionRef.current;
+        pendingActionRef.current = null;
+        if (pendingAction) {
+          await pendingAction();
         }
         return data;
       },
@@ -47,6 +69,15 @@ export function AuthProvider({ children }) {
         if (error) {
           throw error;
         }
+        if (data.session) {
+          setAuthModalOpen(false);
+          setAuthIntent("");
+          const pendingAction = pendingActionRef.current;
+          pendingActionRef.current = null;
+          if (pendingAction) {
+            await pendingAction();
+          }
+        }
         return data;
       },
       async signOut() {
@@ -54,18 +85,6 @@ export function AuthProvider({ children }) {
         if (error) {
           throw error;
         }
-      },
-      async sendMagicLink(email) {
-        const { data, error } = await supabase.auth.signInWithOtp({
-          email,
-          options: {
-            emailRedirectTo: window.location.origin
-          }
-        });
-        if (error) {
-          throw error;
-        }
-        return data;
       },
       async resetPassword(email) {
         const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -77,7 +96,7 @@ export function AuthProvider({ children }) {
         return data;
       }
     }),
-    [session]
+    [authIntent, authModalOpen, session]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

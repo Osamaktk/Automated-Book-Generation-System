@@ -4,6 +4,15 @@ export async function getBooks(accessToken) {
   return request("/books", { accessToken });
 }
 
+export async function createBook(payload, accessToken) {
+  return request("/books/create", {
+    method: "POST",
+    accessToken,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function deleteBook(bookId, accessToken) {
   return request(`/books/${bookId}`, { method: "DELETE", accessToken });
 }

@@ -6,6 +6,7 @@ import NotesPanels from "../components/shared/NotesPanels";
 import Alert from "../components/ui/Alert";
 import Loader from "../components/ui/Loader";
 import StatusBadge from "../components/ui/StatusBadge";
+import { useGuestSession } from "../context/GuestStorageContext";
 import { useAuth } from "../hooks/useAuth";
 import { useChapterDetail } from "../hooks/useChapterDetail";
 import { submitChapterFeedback } from "../services/bookService";
@@ -14,7 +15,8 @@ function ChapterDetailPage() {
   const navigate = useNavigate();
   const { bookId, chapterId } = useParams();
   const { accessToken } = useAuth();
-  const { chapter, book, loading, error, reload } = useChapterDetail(bookId, chapterId);
+  const { submitChapterFeedback: submitGuestChapterFeedback } = useGuestSession();
+  const { chapter, book, loading, error, reload, isGuestChapter } = useChapterDetail(bookId, chapterId);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [showRevision, setShowRevision] = useState(false);
   const [revisionNotes, setRevisionNotes] = useState("");
@@ -37,7 +39,9 @@ function ChapterDetailPage() {
     try {
       setFeedbackLoading(true);
       setMessage(null);
-      const response = await submitChapterFeedback(chapterId, { status, editor_notes: revisionNotes }, accessToken);
+      const response = isGuestChapter
+        ? submitGuestChapterFeedback(bookId, chapterId, { status, editor_notes: revisionNotes })
+        : await submitChapterFeedback(chapterId, { status, editor_notes: revisionNotes }, accessToken);
       setMessage({ type: "success", text: response.message || "Chapter updated." });
       setShowRevision(false);
       setRevisionNotes("");

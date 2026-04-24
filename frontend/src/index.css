@@ -177,6 +177,13 @@ textarea {
   margin-bottom: 12px;
 }
 
+.guest-chip {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
 .user-avatar {
   width: 34px;
   height: 34px;
@@ -636,6 +643,34 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 32px;
+}
+
+.auth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(8, 8, 8, 0.74);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.auth-modal-overlay-standalone {
+  position: static;
+  background: transparent;
+  padding: 0;
+}
+
+.auth-modal-card {
+  max-width: 480px;
+}
+
+.auth-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .auth-title {

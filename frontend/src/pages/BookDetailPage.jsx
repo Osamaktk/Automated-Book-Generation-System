@@ -8,9 +8,12 @@ import Pipeline from "../components/shared/Pipeline";
 import StoryContextPanel from "../components/shared/StoryContextPanel";
 import Alert from "../components/ui/Alert";
 import Loader from "../components/ui/Loader";
+import ProtectedActionWrapper from "../components/ui/ProtectedActionWrapper";
 import StatusBadge from "../components/ui/StatusBadge";
+import { useGuestSession } from "../context/GuestStorageContext";
 import { useAuth } from "../hooks/useAuth";
 import { useBookDetail } from "../hooks/useBookDetail";
+import { useSyncOnLogin } from "../hooks/useSyncOnLogin";
 import {
   createShareLink,
   downloadCompiledBook,
@@ -23,8 +26,10 @@ import { getBookNotifications, getPipelineStage } from "../utils/book";
 function BookDetailPage() {
   const navigate = useNavigate();
   const { bookId } = useParams();
-  const { accessToken } = useAuth();
-  const { data, chapters, loading, error, reload } = useBookDetail(bookId);
+  const { accessToken, isAuthenticated } = useAuth();
+  const { submitOutlineFeedback: submitGuestOutlineFeedback, generateGuestChapter } = useGuestSession();
+  const { syncing, syncGuestBook } = useSyncOnLogin();
+  const { data, chapters, loading, error, reload, isGuestBook } = useBookDetail(bookId);
   const [revNotes, setRevNotes] = useState("");
   const [showRev, setShowRev] = useState(false);
   const [message, setMessage] = useState(null);
@@ -67,7 +72,9 @@ function BookDetailPage() {
     try {
       setFeedbackLoading(true);
       setMessage(null);
-      const response = await submitOutlineFeedback(bookId, { status, editor_notes: revNotes }, accessToken);
+      const response = isGuestBook
+        ? submitGuestOutlineFeedback(bookId, { status, editor_notes: revNotes })
+        : await submitOutlineFeedback(bookId, { status, editor_notes: revNotes }, accessToken);
       setMessage({ type: "success", text: response.message || "Outline updated." });
       setShowRev(false);
       setRevNotes("");
@@ -80,6 +87,24 @@ function BookDetailPage() {
   }
 
   async function handleGenerateChapter() {
+    if (isGuestBook) {
+      try {
+        setGenerating(true);
+        setMessage(null);
+        const chapter = generateGuestChapter(bookId);
+        setMessage({
+          type: "success",
+          text: `Chapter ${chapter.chapter_number} generated locally and is ready for review.`
+        });
+        await reload(false);
+      } catch (err) {
+        setMessage({ type: "error", text: err.message || "Unable to create local chapter." });
+      } finally {
+        setGenerating(false);
+      }
+      return;
+    }
+
     try {
       setGenerating(true);
       setStreamText("");
@@ -108,10 +133,28 @@ function BookDetailPage() {
     }
   }
 
+  async function syncCurrentBook() {
+    if (!isGuestBook) {
+      setMessage({ type: "success", text: "This book is already synced to your account." });
+      return bookId;
+    }
+
+    const result = await syncGuestBook(bookId);
+    if (result?.warning) {
+      setMessage({ type: "info", text: result.warning });
+    }
+    if (result?.remoteBookId) {
+      navigate(`/books/${result.remoteBookId}`, { replace: true });
+      return result.remoteBookId;
+    }
+    throw new Error("Unable to sync guest book.");
+  }
+
   async function handleDownload(format) {
     try {
       setDownloadingFormat(format);
-      const { blob, filename } = await downloadCompiledBook(bookId, format, accessToken);
+      const resolvedBookId = isGuestBook ? await syncCurrentBook() : bookId;
+      const { blob, filename } = await downloadCompiledBook(resolvedBookId, format, accessToken);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -136,7 +179,8 @@ function BookDetailPage() {
 
     try {
       setShareLoading(true);
-      const response = await shareBookWithUser(bookId, shareWith.trim(), accessToken);
+      const resolvedBookId = isGuestBook ? await syncCurrentBook() : bookId;
+      const response = await shareBookWithUser(resolvedBookId, shareWith.trim(), accessToken);
       setMessage({
         type: "success",
         text: response.message || "Book shared successfully."
@@ -152,7 +196,8 @@ function BookDetailPage() {
   async function handleCreateShareLink() {
     try {
       setShareLoading(true);
-      const response = await createShareLink(bookId, accessToken);
+      const resolvedBookId = isGuestBook ? await syncCurrentBook() : bookId;
+      const response = await createShareLink(resolvedBookId, accessToken);
       setShareUrl(response.share_url || "");
       setMessage({
         type: "success",
@@ -197,10 +242,21 @@ function BookDetailPage() {
       <div className="flex-between page-header">
         <div>
           <h2>{book.title}</h2>
+          {!isAuthenticated ? <div className="helper-text">Guest draft. Save or sync when you are ready.</div> : null}
+          {isGuestBook ? <div className="helper-text">This manuscript is stored locally until you sync it.</div> : null}
           <div className="top-status">
             <StatusBadge status={book.status} />
           </div>
           <div className="header-line" />
+        </div>
+        <div className="inline-actions">
+          <ProtectedActionWrapper action={syncCurrentBook} intent="Sign in to save this book to your account.">
+            {({ runAction }) => (
+              <button className="btn btn-gold" onClick={runAction} disabled={syncing}>
+                {syncing ? "Syncing..." : isGuestBook ? "Save Book" : "Sync Data"}
+              </button>
+            )}
+          </ProtectedActionWrapper>
         </div>
       </div>
 
@@ -306,12 +362,20 @@ function BookDetailPage() {
           />
         </div>
         <div className="inline-actions">
-          <button className="btn btn-gold" onClick={handleShareUser} disabled={shareLoading}>
-            Share With User
-          </button>
-          <button className="btn btn-ghost" onClick={handleCreateShareLink} disabled={shareLoading}>
-            Generate Share Link
-          </button>
+          <ProtectedActionWrapper action={handleShareUser} intent="Sign in to share this book with another user.">
+            {({ runAction }) => (
+              <button className="btn btn-gold" onClick={runAction} disabled={shareLoading}>
+                Share With User
+              </button>
+            )}
+          </ProtectedActionWrapper>
+          <ProtectedActionWrapper action={handleCreateShareLink} intent="Sign in to create a shareable link.">
+            {({ runAction }) => (
+              <button className="btn btn-ghost" onClick={runAction} disabled={shareLoading}>
+                Generate Share Link
+              </button>
+            )}
+          </ProtectedActionWrapper>
         </div>
         {shareUrl ? (
           <div className="share-banner mt-16">
@@ -347,14 +411,21 @@ function BookDetailPage() {
               <div className="download-panel-label">Download Final Manuscript</div>
               <div className="download-btns">
                 {["docx", "pdf", "txt"].map((format) => (
-                  <button
+                  <ProtectedActionWrapper
                     key={format}
-                    className="btn-download"
-                    onClick={() => handleDownload(format)}
-                    disabled={Boolean(downloadingFormat)}
+                    action={() => handleDownload(format)}
+                    intent={`Sign in to export this manuscript as ${format.toUpperCase()}.`}
                   >
-                    {downloadingFormat === format ? "Downloading..." : format.toUpperCase()}
-                  </button>
+                    {({ runAction }) => (
+                      <button
+                        className="btn-download"
+                        onClick={runAction}
+                        disabled={Boolean(downloadingFormat)}
+                      >
+                        {downloadingFormat === format ? "Downloading..." : format.toUpperCase()}
+                      </button>
+                    )}
+                  </ProtectedActionWrapper>
                 ))}
               </div>
             </div>

@@ -4,13 +4,16 @@ import { BrowserRouter } from "react-router-dom";
 
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
+import { GuestStorageProvider } from "./context/GuestStorageContext";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        <GuestStorageProvider>
+          <App />
+        </GuestStorageProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

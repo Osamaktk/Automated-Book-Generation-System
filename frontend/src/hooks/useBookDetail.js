@@ -1,19 +1,41 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useGuestSession } from "../context/GuestStorageContext";
 import { getBook, getBookChapters, getChapter } from "../services/bookService";
 import { sortChapters } from "../utils/book";
 import { useAuth } from "./useAuth";
 
 export function useBookDetail(bookId) {
-  const { accessToken } = useAuth();
+  const { accessToken, isAuthenticated } = useAuth();
+  const { getBookDetail } = useGuestSession();
   const [data, setData] = useState(null);
   const [chapters, setChapters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [source, setSource] = useState("remote");
 
   const load = useCallback(
     async (withLoader = true) => {
       if (!bookId) {
+        return;
+      }
+
+      const guestDetail = getBookDetail(bookId);
+      if (guestDetail) {
+        setData({ book: guestDetail.book, outline: guestDetail.outline });
+        setChapters(guestDetail.chapters);
+        setSource("guest");
+        setError("");
+        setLoading(false);
+        return;
+      }
+
+      if (!isAuthenticated || !accessToken) {
+        setData(null);
+        setChapters([]);
+        setSource("remote");
+        setError("Sign in to load saved cloud books.");
+        setLoading(false);
         return;
       }
 
@@ -42,6 +64,7 @@ export function useBookDetail(bookId) {
 
         setData(bookData);
         setChapters(sortChapters(detailedChapters));
+        setSource("remote");
       } catch (err) {
         setError(err.message || "Unable to load manuscript.");
       } finally {
@@ -50,7 +73,7 @@ export function useBookDetail(bookId) {
         }
       }
     },
-    [accessToken, bookId]
+    [accessToken, bookId, getBookDetail, isAuthenticated]
   );
 
   useEffect(() => {
@@ -63,9 +86,11 @@ export function useBookDetail(bookId) {
       chapters,
       loading,
       error,
+      source,
+      isGuestBook: source === "guest",
       reload: load,
       setChapters
     }),
-    [chapters, data, error, load, loading]
+    [chapters, data, error, load, loading, source]
   );
 }

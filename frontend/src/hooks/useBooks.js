@@ -1,26 +1,35 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { useGuestSession } from "../context/GuestStorageContext";
 import { deleteBook, getBooks } from "../services/bookService";
 import { useAuth } from "./useAuth";
 
 export function useBooks() {
-  const { accessToken } = useAuth();
-  const [books, setBooks] = useState([]);
+  const { accessToken, isAuthenticated } = useAuth();
+  const { guestBooks, removeGuestBook } = useGuestSession();
+  const [remoteBooks, setRemoteBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const loadBooks = useCallback(async () => {
+    if (!isAuthenticated || !accessToken) {
+      setRemoteBooks([]);
+      setLoading(false);
+      setError("");
+      return;
+    }
+
     try {
       setLoading(true);
       setError("");
       const data = await getBooks(accessToken);
-      setBooks(data.books || []);
+      setRemoteBooks(data.books || []);
     } catch (err) {
       setError(err.message || "Unable to load books.");
     } finally {
       setLoading(false);
     }
-  }, [accessToken]);
+  }, [accessToken, isAuthenticated]);
 
   useEffect(() => {
     loadBooks();
@@ -28,14 +37,20 @@ export function useBooks() {
 
   const removeBook = useCallback(
     async (bookId) => {
+      const guestBook = guestBooks.find((book) => book.id === bookId);
+      if (guestBook) {
+        removeGuestBook(bookId);
+        return;
+      }
+
       await deleteBook(bookId, accessToken);
-      setBooks((current) => current.filter((book) => book.id !== bookId));
+      setRemoteBooks((current) => current.filter((book) => book.id !== bookId));
     },
-    [accessToken]
+    [accessToken, guestBooks, removeGuestBook]
   );
 
   return {
-    books,
+    books: [...guestBooks, ...remoteBooks],
     loading,
     error,
     reload: loadBooks,
