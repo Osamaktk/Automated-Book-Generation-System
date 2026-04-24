@@ -22,6 +22,18 @@ The frontend expects the API to be running from the project root with:
 uvicorn backend.main:app --reload
 ```
 
+If you are already inside the `backend/` folder, use:
+
+```powershell
+uvicorn dev_server:app --reload
+```
+
+Or use the simpler launcher:
+
+```powershell
+python run_backend.py
+```
+
 ## Routes
 
 - `/dashboard`

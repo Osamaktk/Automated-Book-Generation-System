@@ -265,7 +265,7 @@ function BookDetailPage() {
               : pendingChapter
                 ? `Approve Chapter ${pendingChapter.chapter_number} before generating the next chapter.`
                 : isComplete
-                  ? "This book has already been completed."
+                  ? "This book has already been completed. Download options are available below."
                   : "Generate the next chapter in sequence."}
           </div>
 

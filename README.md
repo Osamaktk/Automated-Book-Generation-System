@@ -60,7 +60,26 @@ VITE_API_URL=http://127.0.0.1:8000
 ## Local Run
 
 1. Install backend dependencies from `requirements.txt`
-2. Start the API with `uvicorn backend.main:app --reload`
+2. Start the API with one of these commands:
+
+From the project root:
+
+```powershell
+uvicorn backend.main:app --reload
+```
+
+From inside the `backend/` folder:
+
+```powershell
+uvicorn dev_server:app --reload
+```
+
+Simplest option from inside `backend/`:
+
+```powershell
+python run_backend.py
+```
+
 3. In `frontend/`, run `npm install`
 4. Run `npm run dev`
 

@@ -24,7 +24,12 @@ from backend.database import (
     update_outline,
 )
 from backend.models import BookInput, EditorFeedback
-from backend.prompts import build_chapter_prompt, build_outline_prompt, extract_chapter_title
+from backend.prompts import (
+    build_chapter_prompt,
+    build_outline_prompt,
+    count_outline_chapters,
+    extract_chapter_title,
+)
 from backend.services.compiler import compile_to_docx, compile_to_pdf, compile_to_txt
 from backend.services.notifications import notify
 
@@ -42,6 +47,23 @@ def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
         for chapter in approved_chapters
         if chapter.get("summary")
     ]
+
+
+def _sync_book_completion(book: dict, client: Client) -> dict:
+    outline = get_latest_outline(book["id"], client=client)
+    if not outline:
+        return book
+
+    planned_chapter_count = count_outline_chapters(outline.get("content", ""))
+    approved_chapters = get_approved_chapters(book["id"], client=client)
+    if (
+        planned_chapter_count > 0
+        and len(approved_chapters) >= planned_chapter_count
+        and book.get("status") != "chapters_complete"
+    ):
+        update_book_status(book["id"], "chapters_complete", client=client)
+        return {**book, "status": "chapters_complete"}
+    return book
 
 
 def _normalize_header(value: str) -> str:
@@ -129,6 +151,14 @@ def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
         )
 
     approved_chapters = get_approved_chapters(book["id"], client=client)
+    planned_chapter_count = count_outline_chapters(outline.get("content", ""))
+    if planned_chapter_count > 0 and len(approved_chapters) >= planned_chapter_count:
+        update_book_status(book["id"], "chapters_complete", client=client)
+        raise HTTPException(
+            400,
+            "All planned chapters are already complete for this book.",
+        )
+
     next_number = len(approved_chapters) + 1
     chapter_title = extract_chapter_title(outline["content"], next_number)
     previous_summaries = _build_previous_summaries(approved_chapters)
@@ -315,7 +345,11 @@ async def create_book_route(
 @router.get("")
 async def list_books_route():
     try:
-        return {"books": list_books(client=supabase)}
+        books = [
+            _sync_book_completion(book, supabase)
+            for book in list_books(client=supabase)
+        ]
+        return {"books": books}
     except Exception as exc:
         logger.error("List books failed: %s", exc, exc_info=True)
         raise HTTPException(500, str(exc))
@@ -329,6 +363,7 @@ async def get_book_route(
         book = get_book(book_id, client=supabase)
         if not book:
             raise HTTPException(404, "Book not found")
+        book = _sync_book_completion(book, supabase)
         return {"book": book, "outline": get_latest_outline(book_id, client=supabase)}
     except HTTPException:
         raise

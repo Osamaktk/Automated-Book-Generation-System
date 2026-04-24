@@ -1,10 +1,11 @@
 import asyncio
 
-from backend.config import FALLBACK_MODEL, PRIMARY_MODEL, logger, openrouter_client
+from backend.config import FALLBACK_MODEL, PRIMARY_MODEL, get_openrouter_client, logger
 
 
 def call_ai(prompt: str, max_tokens: int = 2000) -> str:
     try:
+        openrouter_client = get_openrouter_client()
         response = openrouter_client.chat.completions.create(
             model=PRIMARY_MODEL,
             messages=[{"role": "user", "content": prompt}],
@@ -20,6 +21,7 @@ def call_ai(prompt: str, max_tokens: int = 2000) -> str:
             FALLBACK_MODEL,
         )
         try:
+            openrouter_client = get_openrouter_client()
             response = openrouter_client.chat.completions.create(
                 model=FALLBACK_MODEL,
                 messages=[{"role": "user", "content": prompt}],
@@ -37,6 +39,7 @@ async def stream_ai_async(prompt: str, max_tokens: int = 2000):
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     def enqueue_stream(model_name: str):
+        openrouter_client = get_openrouter_client()
         stream = openrouter_client.chat.completions.create(
             model=model_name,
             messages=[{"role": "user", "content": prompt}],

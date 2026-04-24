@@ -413,10 +413,12 @@ textarea {
 .chapter-content {
   max-height: 560px;
   font-size: 15px;
+  overflow-y: auto;
 }
 
 .summary-box {
   max-height: 180px;
+  overflow-y: auto;
 }
 
 .chapter-item {

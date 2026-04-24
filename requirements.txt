@@ -9,3 +9,4 @@ reportlab
 httpx
 openpyxl
 python-multipart
+typing_extensions
