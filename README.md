@@ -1,64 +1,143 @@
-# AutoBook
+# Automated Book Generation System
 
-Automated book generation system with a human-in-the-loop editorial workflow.
+![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/Frontend-React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![OpenRouter](https://img.shields.io/badge/AI-OpenRouter-4B5DFF?style=for-the-badge)
+![DeepSeek](https://img.shields.io/badge/AI-DeepSeek-2F6FED?style=for-the-badge)
+![DOCX/PDF](https://img.shields.io/badge/Export-DOCX%20%2F%20PDF-C9972F?style=for-the-badge)
 
-## What It Does
+An end-to-end AI publishing workflow that turns a title and editorial brief into a reviewable outline, sequential chapters, and a final manuscript export. The platform follows a human-in-the-loop editorial process so the editor can review, approve, revise, and monitor every important stage before publication.
 
-- Create a book from a title and initial notes
-- Generate an outline and pause for editor review
-- Regenerate the outline when revision notes are submitted
-- Generate chapters sequentially using summaries of approved earlier chapters
-- Approve chapters or request revisions until the planned chapter count is complete
-- Send optional SMTP or Microsoft Teams notifications
-- Export the final manuscript as `docx` or `pdf` only after final approval
+## Table of Contents
 
-## Stack
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Workflow](#workflow)
+- [Brief-Aligned Fields](#brief-aligned-fields)
+- [API Endpoints](#api-endpoints)
+- [Local Development](#local-development)
+- [Environment Variables](#environment-variables)
+- [Project Structure](#project-structure)
+- [Screenshots and Demo](#screenshots-and-demo)
+- [Supporting Docs](#supporting-docs)
+- [Submission Status](#submission-status)
 
-- Backend: FastAPI
-- Database: Supabase
-- AI: OpenRouter-compatible chat models
-- Frontend: React + Vite
-- Output: `python-docx`, `reportlab`
+## Overview
+
+This project implements the workflow described in the project brief:
+
+- ingest a title and pre-outline notes
+- generate a gated outline for editorial review
+- generate chapters sequentially after outline approval
+- summarize approved chapters and reuse them as context for narrative continuity
+- notify the editor when review is needed or the manuscript is complete
+- export the final manuscript as `docx` or `pdf` after completion
 
 ## Architecture
 
-The system follows a simple modular flow that matches the project brief:
+The platform is organized into five main layers:
 
-1. Input and Seeding
-- A book is created from title + notes in the dashboard or imported from `.csv` / `.xlsx`
-- The original brief is stored as `notes_on_outline_before`
+- `React Dashboard`
+  Create books, review outlines, approve chapters, inspect brief-aligned fields, and export final manuscripts.
+- `FastAPI Backend`
+  Handles orchestration, workflow transitions, generation triggers, review gating, and export endpoints.
+- `AI Generation Layer`
+  Uses OpenRouter and DeepSeek-backed models for outline generation, chapter writing, and summarization.
+- `Supabase Database`
+  Stores books, outlines, chapters, summaries, review status, and brief-aligned fields.
+- `Notification + Export Services`
+  Sends SMTP email notifications and compiles final manuscripts into `docx` or `pdf`.
 
-2. Outline Generation and Review
-- The backend generates an outline through the AI layer
-- The outline is saved in Supabase and paused for editor review
-- The editor can approve or request revision through the dashboard
+![System Architecture Diagram](docs/images/architecture-diagram.png)
 
-3. Chapter Engine and Context Chaining
-- After outline approval, chapters are generated sequentially
-- Each approved chapter is summarized and stored
-- Later chapter prompts use those summaries to preserve continuity
+## Key Features
 
-4. Completion and Final Export
-- When the planned chapter count is fully approved, the manuscript is marked complete
-- Final export becomes available as `docx` or `pdf`
+- Human-in-the-loop editorial workflow
+- Gated outline approval and revision loop
+- Sequential chapter generation
+- Context-aware chapter generation using approved chapter summaries
+- Planned chapter limit enforcement
+- Automatic manuscript completion when all planned chapters are approved
+- Email notifications for review milestones
+- Spreadsheet import via `.csv` and `.xlsx`
+- Final manuscript export in `docx` and `pdf`
+- Project-brief field alignment across API, UI, and database support
 
-5. Notifications
-- The backend can notify the editor through SMTP email or Teams webhook when review is needed or the book is complete
+## Tech Stack
 
-## Main API Endpoints
+- Backend: FastAPI
+- Frontend: React + Vite
+- Database: Supabase / PostgreSQL
+- AI Providers: OpenRouter and DeepSeek
+- Export: `python-docx`, `reportlab`
+- Notifications: SMTP email, optional Microsoft Teams webhook
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
+## Workflow
+
+1. Create a book from a title and editorial notes.
+2. Generate an outline and pause for editorial review.
+3. Approve the outline or request revision.
+4. Generate chapters in sequence.
+5. Approve or revise each chapter.
+6. Save a summary for every approved chapter.
+7. Reuse stored summaries as context for the next chapter.
+8. Mark the manuscript complete once all planned chapters are approved.
+9. Export the final manuscript as `docx` or `pdf`.
+
+## Brief-Aligned Fields
+
+The system supports the project brief naming directly in the UI and API:
+
+- `notes_on_outline_before`
+- `status_outline_notes`
+- `chapter_notes_status`
+- `no_notes_needed`
+
+These fields map to the outline review lifecycle, chapter review lifecycle, and final approval state required by the brief.
+
+## API Endpoints
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
 | `GET` | `/` | Health check |
 | `POST` | `/books/create-stream` | Create a book and stream outline generation |
-| `POST` | `/books/import` | Import books from `.csv` or `.xlsx` for batch seeding |
-| `GET` | `/books` | List all books |
-| `GET` | `/books/{id}` | Get a book and its latest outline |
-| `POST` | `/books/{id}/feedback` | Approve or revise the outline |
-| `GET` | `/books/{id}/chapters` | List book chapters |
+| `POST` | `/books/import` | Import books from `.csv` or `.xlsx` |
+| `GET` | `/books` | List books |
+| `GET` | `/books/{id}` | Get book details and latest outline |
+| `POST` | `/books/{id}/feedback` | Approve or revise an outline |
+| `GET` | `/books/{id}/chapters` | List chapters for a book |
 | `POST` | `/books/{id}/generate-chapter-stream` | Stream the next chapter |
-| `POST` | `/chapters/{id}/feedback` | Approve, revise, or mark final chapter |
-| `GET` | `/books/{id}/compile?format=docx` | Export after final approval |
+| `POST` | `/chapters/{id}/feedback` | Approve or revise a chapter |
+| `GET` | `/books/{id}/compile?format=docx` | Export final DOCX |
+| `GET` | `/books/{id}/compile?format=pdf` | Export final PDF |
+
+## Local Development
+
+### Backend
+
+From the project root:
+
+```powershell
+pip install -r requirements.txt
+uvicorn backend.main:app --reload
+```
+
+Or from inside `backend/`:
+
+```powershell
+python run_backend.py
+```
+
+### Frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
 
 ## Environment Variables
 
@@ -68,6 +147,8 @@ Backend:
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
 OPENROUTER_API_KEY=your_openrouter_api_key
+DEEPSEEK_API_KEY=your_deepseek_api_key
+DEEPSEEK_MODEL=deepseek-chat
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=
@@ -82,91 +163,60 @@ Frontend:
 VITE_API_URL=http://127.0.0.1:8000
 ```
 
-## Local Run
+## Project Structure
 
-1. Install backend dependencies from `requirements.txt`
-2. Start the API with one of these commands:
+```text
+backend/
+  routes/
+  services/
+  main.py
 
-From the project root:
+frontend/
+  src/
+  public/
 
-```powershell
-uvicorn backend.main:app --reload
+docs/
+  schema.md
+  submission_checklist.md
+  import_template.csv
+  supabase_brief_column_migration.sql
+  images/
 ```
 
-From inside the `backend/` folder:
+## Screenshots and Demo
 
-```powershell
-uvicorn dev_server:app --reload
-```
+Recommended final submission assets:
 
-Simplest option from inside `backend/`:
+- dashboard overview screenshot
+- outline review screenshot
+- chapter review screenshot
+- final export screenshot
+- notification email screenshot
+- one sample manuscript export
+- one short walkthrough video
 
-```powershell
-python run_backend.py
-```
+For the full checklist and demo script, see [docs/submission_checklist.md](docs/submission_checklist.md).
 
-3. In `frontend/`, run `npm install`
-4. Run `npm run dev`
+## Supporting Docs
 
-## Current Workflow
+- Schema reference: [docs/schema.md](docs/schema.md)
+- Submission checklist and demo script: [docs/submission_checklist.md](docs/submission_checklist.md)
+- Spreadsheet import template: [docs/import_template.csv](docs/import_template.csv)
+- Optional Supabase brief-column migration: [docs/supabase_brief_column_migration.sql](docs/supabase_brief_column_migration.sql)
 
-1. Create a new book with title and notes.
-2. Review the generated outline.
-3. Approve the outline or request revision.
-4. Generate chapters one by one.
-5. Approve each chapter or request revision.
-6. When the last planned chapter is approved, the system automatically marks the book as complete.
-7. Export the completed manuscript.
+## Submission Status
 
-## Spreadsheet Import
+Implementation-wise, the system covers the core technical requirements in the project brief:
 
-The project now supports local spreadsheet seeding for the "Google Sheets or Local Excel" requirement.
+- gated outline pipeline
+- context-aware chapter generation
+- monitoring dashboard
+- notification support
+- final manuscript compilation
+- spreadsheet-based input seeding
 
-- Supported formats: `.csv`, `.xlsx`
-- Required columns: `title`, `notes`
-- Endpoint: `POST /books/import`
-- Query option: `generate_outlines=true|false`
+The remaining work for final submission is mainly packaging:
 
-Example flow:
-
-- Export a Google Sheet as `.csv`, or prepare a local Excel file.
-- Upload it to `/books/import`.
-- When `generate_outlines=true`, each imported book enters the normal review pipeline with an outline ready for review.
-
-## Requirement Mapping
-
-- Gated outline pipeline: implemented through `/books/create`, `/books/create-stream`, and `/books/{id}/feedback`
-- Context-aware chapter engine: implemented through summary storage plus sequential chapter generation
-- Monitoring dashboard: implemented in the React frontend
-- Notifications: implemented with SMTP and Teams webhook support
-- Final compilation: implemented and now blocked until final approval
-- Local Excel / spreadsheet input: implemented through `/books/import`
-- Source-backed research: not implemented because it is optional in the brief
-
-### Brief Field Alignment
-
-The project brief uses some field names that differ from this app's original internal naming. The API now exposes brief-style aliases so the implementation maps more directly to the document:
-
-- `notes_on_outline_before`: the initial `book.notes` value used before outline generation
-- `status_outline_notes`: the current outline review state derived from the latest outline and book workflow status
-- `chapter_notes_status`: the review state of each chapter
-- `no_notes_needed`: `true` when the manuscript has reached final completion and export is allowed
-
-## Submission Checklist
-
-- Code repository: complete
-- DB schema description: see [docs/schema.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/schema.md:1)
-- Requirement mapping: included in this README
-- Dashboard screenshots: still needed
-- Video demonstration: still needed
-- Sample generated `.docx` or `.pdf`: still needed
-- Demo checklist and script: see [docs/submission_checklist.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/submission_checklist.md:1)
-
-## Presentation Pack
-
-Use these project files during final submission preparation:
-
-- Demo checklist and video speaking script: [docs/submission_checklist.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/submission_checklist.md:1)
-- Database schema reference: [docs/schema.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/schema.md:1)
-- Spreadsheet import template: [docs/import_template.csv](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/import_template.csv:1)
-- Optional Supabase brief-column migration: [docs/supabase_brief_column_migration.sql](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/supabase_brief_column_migration.sql:1)
+- capture dashboard screenshots
+- export one polished sample manuscript
+- record the demo video
