@@ -1,3 +1,4 @@
+import re
 from typing import Iterable
 
 
@@ -71,3 +72,28 @@ def extract_chapter_title(outline_content: str, chapter_number: int) -> str:
             if clean_line:
                 return clean_line
     return fallback_title
+
+
+def count_outline_chapters(outline_content: str) -> int:
+    chapter_numbers = set()
+    for line in outline_content.splitlines():
+        clean_line = line.strip()
+        if not clean_line:
+            continue
+
+        chapter_match = re.search(r"\bchapter\s+(\d+)\b", clean_line, flags=re.IGNORECASE)
+        if chapter_match:
+            chapter_numbers.add(int(chapter_match.group(1)))
+            continue
+
+        numbered_match = re.match(r"^\**\s*(\d+)\.\s+", clean_line)
+        if numbered_match:
+            chapter_numbers.add(int(numbered_match.group(1)))
+
+    if not chapter_numbers:
+        return 0
+
+    highest = max(chapter_numbers)
+    if all(number in chapter_numbers for number in range(1, highest + 1)):
+        return highest
+    return len(chapter_numbers)

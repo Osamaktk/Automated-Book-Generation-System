@@ -1,8 +1,11 @@
 import json
+import csv
+import io
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from openpyxl import load_workbook
 from supabase import Client
 
 from ai import call_ai, stream_ai_async
@@ -22,7 +25,7 @@ from database import (
 )
 from models import BookInput, EditorFeedback
 from prompts import build_chapter_prompt, build_outline_prompt, extract_chapter_title
-from services.compiler import compile_to_docx, compile_to_pdf
+from services.compiler import compile_to_docx, compile_to_pdf, compile_to_txt
 from services.notifications import notify
 
 
@@ -39,6 +42,72 @@ def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
         for chapter in approved_chapters
         if chapter.get("summary")
     ]
+
+
+def _normalize_header(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
+
+
+def _extract_row_payload(row: dict, index: int) -> dict:
+    title = str(row.get("title", "")).strip()
+    notes = str(row.get("notes", "")).strip()
+    if not title:
+        raise HTTPException(
+            400,
+            f"Spreadsheet row {index} is missing a title. Expected columns: title, notes",
+        )
+    return {"title": title, "notes": notes}
+
+
+def _parse_csv_rows(content: bytes) -> list[dict]:
+    decoded = content.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(decoded))
+    if not reader.fieldnames:
+        raise HTTPException(400, "CSV file must include a header row")
+
+    reader.fieldnames = [_normalize_header(name) for name in reader.fieldnames]
+    rows = []
+    for raw_row in reader:
+        normalized = {
+            _normalize_header(str(key)): (value or "")
+            for key, value in raw_row.items()
+            if key is not None
+        }
+        if any(str(value).strip() for value in normalized.values()):
+            rows.append(normalized)
+    return rows
+
+
+def _parse_xlsx_rows(content: bytes) -> list[dict]:
+    workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+    worksheet = workbook.active
+    values = list(worksheet.iter_rows(values_only=True))
+    if not values:
+        raise HTTPException(400, "Spreadsheet is empty")
+
+    headers = [_normalize_header(str(cell or "")) for cell in values[0]]
+    if not any(headers):
+        raise HTTPException(400, "Spreadsheet must include a header row")
+
+    rows = []
+    for row in values[1:]:
+        normalized = {
+            headers[index]: "" if cell is None else str(cell)
+            for index, cell in enumerate(row)
+            if index < len(headers) and headers[index]
+        }
+        if any(str(value).strip() for value in normalized.values()):
+            rows.append(normalized)
+    return rows
+
+
+def _load_import_rows(filename: str, content: bytes) -> list[dict]:
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if extension == "csv":
+        return _parse_csv_rows(content)
+    if extension == "xlsx":
+        return _parse_xlsx_rows(content)
+    raise HTTPException(400, "Only .csv and .xlsx files are supported")
 
 
 def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
@@ -93,6 +162,76 @@ def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
         "content": content,
         "status": "waiting_for_review",
     }
+
+
+@router.post("/import")
+async def import_books_route(
+    file: UploadFile = File(...),
+    generate_outlines: bool = Query(
+        default=True,
+        description="Generate outlines immediately for imported books",
+    ),
+):
+    try:
+        filename = file.filename or ""
+        content = await file.read()
+        if not filename:
+            raise HTTPException(400, "Uploaded file must have a filename")
+        if not content:
+            raise HTTPException(400, "Uploaded file is empty")
+
+        raw_rows = _load_import_rows(filename, content)
+        if not raw_rows:
+            raise HTTPException(400, "No import rows found in the uploaded file")
+
+        imported_books = []
+        for index, row in enumerate(raw_rows, start=2):
+            payload = _extract_row_payload(row, index)
+            book = create_book(
+                payload["title"],
+                payload["notes"],
+                status="generating" if generate_outlines else "waiting_for_review",
+                client=supabase,
+            )
+
+            outline_id = None
+            outline_status = None
+            if generate_outlines:
+                outline_content = call_ai(
+                    build_outline_prompt(payload["title"], payload["notes"]),
+                    2000,
+                )
+                outline = create_outline(
+                    book_id=book["id"],
+                    content=outline_content,
+                    status="waiting_for_review",
+                    client=supabase,
+                )
+                outline_id = outline["id"]
+                outline_status = outline["status"]
+                update_book_status(book["id"], "waiting_for_review", client=supabase)
+                notify("outline_ready", book["title"], f"Book ID: {book['id']}")
+
+            imported_books.append(
+                {
+                    "book_id": book["id"],
+                    "title": book["title"],
+                    "status": "waiting_for_review" if generate_outlines else book["status"],
+                    "outline_id": outline_id,
+                    "outline_status": outline_status,
+                }
+            )
+
+        return {
+            "message": f"Imported {len(imported_books)} book(s) from spreadsheet",
+            "generate_outlines": generate_outlines,
+            "books": imported_books,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Book import failed: %s", exc, exc_info=True)
+        raise HTTPException(500, str(exc))
 
 
 @router.post("/create-stream")
@@ -377,29 +516,7 @@ async def compile_book_route(
                 headers=headers,
             )
 
-        compiled_sections = [book["title"].strip()]
-
-        if book.get("notes"):
-            compiled_sections.extend(["", "Author Notes", book["notes"].strip()])
-
-        if outline.get("content"):
-            compiled_sections.extend(["", "Outline", outline["content"].strip()])
-
-        for chapter in approved_chapters:
-            chapter_title = extract_chapter_title(
-                outline.get("content", ""), chapter["chapter_number"]
-            )
-            compiled_sections.extend(
-                [
-                    "",
-                    f"Chapter {chapter['chapter_number']} - {chapter_title}",
-                    chapter["content"].strip(),
-                ]
-            )
-            if chapter.get("summary"):
-                compiled_sections.extend(["", f"Summary: {chapter['summary'].strip()}"])
-
-        content = "\n".join(compiled_sections).strip().encode("utf-8")
+        content = compile_to_txt(book, outline, approved_chapters)
         logger.info("Compiled TXT document for book %s", book_id)
         return StreamingResponse(
             iter([content]),

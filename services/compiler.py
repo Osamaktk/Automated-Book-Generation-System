@@ -19,6 +19,32 @@ from prompts import extract_chapter_title
 logger = logging.getLogger(__name__)
 
 
+def _approved_chapters(chapters: list[dict]) -> list[dict]:
+    return sorted(
+        [chapter for chapter in chapters if chapter.get("status") == "approved"],
+        key=lambda chapter: chapter["chapter_number"],
+    )
+
+
+def _chapter_entries(outline: dict, chapters: list[dict]) -> list[tuple[int, str]]:
+    return [
+        (
+            chapter["chapter_number"],
+            extract_chapter_title(outline.get("content", ""), chapter["chapter_number"]),
+        )
+        for chapter in _approved_chapters(chapters)
+    ]
+
+
+def _overview_lines(book: dict, approved_count: int, generated_on: str) -> list[tuple[str, str]]:
+    return [
+        ("Title", book["title"]),
+        ("Prepared", generated_on),
+        ("Status", book.get("status", "unknown")),
+        ("Approved Chapters", str(approved_count)),
+    ]
+
+
 def compile_to_docx(book: dict, outline: dict, chapters: list) -> bytes:
     """
     Assemble a formatted .docx manuscript in memory and return the raw bytes.
@@ -40,17 +66,8 @@ def compile_to_docx(book: dict, outline: dict, chapters: list) -> bytes:
 
         generated_on = datetime.now(UTC).strftime("%B %d, %Y")
         author_name = book.get("author") or "AutoBook"
-        approved_chapters = sorted(
-            [chapter for chapter in chapters if chapter.get("status") == "approved"],
-            key=lambda chapter: chapter["chapter_number"],
-        )
-        chapter_entries = [
-            (
-                chapter["chapter_number"],
-                extract_chapter_title(outline.get("content", ""), chapter["chapter_number"]),
-            )
-            for chapter in approved_chapters
-        ]
+        approved_chapters = _approved_chapters(chapters)
+        chapter_entries = _chapter_entries(outline, chapters)
 
         title_paragraph = document.add_paragraph()
         title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -83,6 +100,17 @@ def compile_to_docx(book: dict, outline: dict, chapters: list) -> bytes:
             toc_entry.paragraph_format.left_indent = Inches(0.25)
             toc_entry.paragraph_format.space_after = Pt(6)
             toc_entry.add_run(f"Chapter {chapter_number} - {chapter_title}")
+
+        document.add_page_break()
+
+        overview_heading = document.add_paragraph()
+        overview_heading.style = document.styles["Heading 1"]
+        overview_heading.add_run("Manuscript Overview")
+        for label, value in _overview_lines(book, len(approved_chapters), generated_on):
+            overview_paragraph = document.add_paragraph()
+            overview_paragraph.paragraph_format.space_after = Pt(8)
+            overview_paragraph.add_run(f"{label}: ").bold = True
+            overview_paragraph.add_run(value)
 
         document.add_page_break()
 
@@ -168,17 +196,8 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
 
         generated_on = datetime.now(UTC).strftime("%B %d, %Y")
         author_name = book.get("author") or "AutoBook"
-        approved_chapters = sorted(
-            [chapter for chapter in chapters if chapter.get("status") == "approved"],
-            key=lambda chapter: chapter["chapter_number"],
-        )
-        chapter_entries = [
-            (
-                chapter["chapter_number"],
-                extract_chapter_title(outline.get("content", ""), chapter["chapter_number"]),
-            )
-            for chapter in approved_chapters
-        ]
+        approved_chapters = _approved_chapters(chapters)
+        chapter_entries = _chapter_entries(outline, chapters)
 
         document = SimpleDocTemplate(
             output,
@@ -245,6 +264,14 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
             leftIndent=18,
             fontName="Times-Roman",
         )
+        overview_style = ParagraphStyle(
+            "OverviewCopy",
+            parent=styles["BodyText"],
+            fontSize=12,
+            leading=16,
+            spaceAfter=8,
+            fontName="Times-Bold",
+        )
 
         story = [
             Spacer(1, 2.2 * inch),
@@ -263,12 +290,16 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
                 )
             )
 
-        story.extend(
-            [
-                PageBreak(),
-            Paragraph("Author Notes", heading_style),
-            ]
-        )
+        story.extend([PageBreak(), Paragraph("Manuscript Overview", heading_style)])
+        for label, value in _overview_lines(book, len(approved_chapters), generated_on):
+            story.append(
+                Paragraph(
+                    f"{escape(label)}: <font name='Times-Roman'>{escape(value)}</font>",
+                    overview_style,
+                )
+            )
+
+        story.extend([PageBreak(), Paragraph("Author Notes", heading_style)])
 
         for paragraph in re.split(r"\n\s*\n", (book.get("notes") or "").strip()):
             if paragraph.strip():
@@ -330,3 +361,36 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list) -> bytes:
     except Exception as exc:
         logger.error("PDF compilation failed: %s", exc, exc_info=True)
         raise
+
+
+def compile_to_txt(book: dict, outline: dict, chapters: list) -> bytes:
+    generated_on = datetime.now(UTC).strftime("%B %d, %Y")
+    approved_chapters = _approved_chapters(chapters)
+
+    compiled_sections = [
+        book["title"].strip(),
+        "=" * max(len(book["title"].strip()), 12),
+        "",
+        "MANUSCRIPT OVERVIEW",
+        "-" * 19,
+    ]
+
+    for label, value in _overview_lines(book, len(approved_chapters), generated_on):
+        compiled_sections.append(f"{label}: {value}")
+
+    if book.get("notes"):
+        compiled_sections.extend(["", "AUTHOR NOTES", "-" * 12, book["notes"].strip()])
+
+    if outline.get("content"):
+        compiled_sections.extend(["", "OUTLINE", "-" * 7, outline["content"].strip()])
+
+    for chapter in approved_chapters:
+        chapter_title = extract_chapter_title(
+            outline.get("content", ""), chapter["chapter_number"]
+        )
+        heading = f"CHAPTER {chapter['chapter_number']}: {chapter_title}"
+        compiled_sections.extend(["", heading, "-" * len(heading), chapter["content"].strip()])
+        if chapter.get("summary"):
+            compiled_sections.extend(["", f"Chapter Summary: {chapter['summary'].strip()}"])
+
+    return "\n".join(compiled_sections).strip().encode("utf-8")

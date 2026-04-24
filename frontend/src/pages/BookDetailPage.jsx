@@ -285,13 +285,6 @@ function BookDetailPage() {
                 ))}
               </div>
             </div>
-          ) : allChaptersApproved ? (
-            <div className="download-panel">
-              <div className="download-panel-label">Final Approval Required</div>
-              <div className="helper-text">
-                Mark the last reviewed chapter as <strong>Final Chapter</strong> before exporting the manuscript.
-              </div>
-            </div>
           ) : null}
 
           {generating && streamText ? (

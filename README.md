@@ -26,6 +26,7 @@ Automated book generation system with a human-in-the-loop editorial workflow.
 |--------|----------|-------------|
 | `GET` | `/` | Health check |
 | `POST` | `/books/create-stream` | Create a book and stream outline generation |
+| `POST` | `/books/import` | Import books from `.csv` or `.xlsx` for batch seeding |
 | `GET` | `/books` | List all books |
 | `GET` | `/books/{id}` | Get a book and its latest outline |
 | `POST` | `/books/{id}/feedback` | Approve or revise the outline |
@@ -72,3 +73,37 @@ VITE_API_URL=http://127.0.0.1:8000
 5. Approve each chapter or request revision.
 6. Mark the last approved chapter as `Final Chapter`.
 7. Export the completed manuscript.
+
+## Spreadsheet Import
+
+The project now supports local spreadsheet seeding for the "Google Sheets or Local Excel" requirement.
+
+- Supported formats: `.csv`, `.xlsx`
+- Required columns: `title`, `notes`
+- Endpoint: `POST /books/import`
+- Query option: `generate_outlines=true|false`
+
+Example flow:
+
+- Export a Google Sheet as `.csv`, or prepare a local Excel file.
+- Upload it to `/books/import`.
+- When `generate_outlines=true`, each imported book enters the normal review pipeline with an outline ready for review.
+
+## Requirement Mapping
+
+- Gated outline pipeline: implemented through `/books/create`, `/books/create-stream`, and `/books/{id}/feedback`
+- Context-aware chapter engine: implemented through summary storage plus sequential chapter generation
+- Monitoring dashboard: implemented in the React frontend
+- Notifications: implemented with SMTP and Teams webhook support
+- Final compilation: implemented and now blocked until final approval
+- Local Excel / spreadsheet input: implemented through `/books/import`
+- Source-backed research: not implemented because it is optional in the brief
+
+## Submission Checklist
+
+- Code repository: complete
+- DB schema description: see [docs/schema.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/schema.md:1)
+- Requirement mapping: included in this README
+- Dashboard screenshots: still needed
+- Video demonstration: still needed
+- Sample generated `.docx` or `.pdf`: still needed

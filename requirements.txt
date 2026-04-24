@@ -7,3 +7,5 @@ python-dotenv
 python-docx
 reportlab
 httpx
+openpyxl
+python-multipart

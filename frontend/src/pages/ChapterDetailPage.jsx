@@ -106,9 +106,6 @@ function ChapterDetailPage() {
             <button className="btn btn-success" onClick={() => handleFeedback("approved")} disabled={feedbackLoading}>
               {feedbackLoading ? "Saving..." : "Approve Chapter"}
             </button>
-            <button className="btn btn-gold" onClick={() => handleFeedback("final_chapter")} disabled={feedbackLoading}>
-              {feedbackLoading ? "Saving..." : "Final Chapter"}
-            </button>
             <button className="btn btn-ghost" onClick={() => setShowRevision((current) => !current)} disabled={feedbackLoading}>
               Request Revision
             </button>

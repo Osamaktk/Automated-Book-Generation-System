@@ -12,7 +12,12 @@ from database import (
     update_chapter,
 )
 from models import EditorFeedback
-from prompts import build_chapter_prompt, build_summary_prompt, extract_chapter_title
+from prompts import (
+    build_chapter_prompt,
+    build_summary_prompt,
+    count_outline_chapters,
+    extract_chapter_title,
+)
 from services.notifications import notify
 
 
@@ -103,16 +108,31 @@ async def submit_chapter_feedback(
                 summary=summary,
                 editor_notes=feedback.editor_notes,
             )
-            if feedback.status == "final_chapter":
-                update_book_status(chapter["book_id"], "chapters_complete", client=supabase)
+
+            approved_chapters = get_approved_chapters(chapter["book_id"], client=supabase)
+            planned_chapter_count = count_outline_chapters(outline["content"])
+            is_complete = feedback.status == "final_chapter" or (
+                planned_chapter_count > 0
+                and len(approved_chapters) >= planned_chapter_count
+            )
+
+            if is_complete:
+                update_book_status(
+                    chapter["book_id"], "chapters_complete", client=supabase
+                )
                 notify(
                     "book_complete",
                     book["title"],
                     "All chapters approved. Ready to compile.",
                 )
                 return {
-                    "message": f"Chapter {chapter['chapter_number']} approved as FINAL chapter!",
+                    "message": (
+                        f"Chapter {chapter['chapter_number']} approved. "
+                        "All planned chapters are complete."
+                    ),
                     "status": "chapters_complete",
+                    "chapter_number": chapter["chapter_number"],
+                    "summary_saved": summary,
                 }
             return {
                 "message": f"Chapter {chapter['chapter_number']} approved!",

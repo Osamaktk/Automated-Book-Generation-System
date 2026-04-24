@@ -18,19 +18,21 @@ function Sidebar() {
 
       <div className="sidebar-nav">
         <div className="nav-section-label">Workspace</div>
-        {items.map((item) => {
-          const active =
-            location.pathname === "/dashboard" &&
-            ((item.key === "library" && !location.search.includes("tab=create")) ||
-              (item.key === "create" && location.search.includes("tab=create")));
+        <div className="nav-links">
+          {items.map((item) => {
+            const active =
+              location.pathname === "/dashboard" &&
+              ((item.key === "library" && !location.search.includes("tab=create")) ||
+                (item.key === "create" && location.search.includes("tab=create")));
 
-          return (
-            <Link key={item.to} className={`nav-item ${active ? "active" : ""}`} to={item.to}>
-              <span className="nav-icon">{item.icon}</span>
-              {item.label}
-            </Link>
-          );
-        })}
+            return (
+              <Link key={item.to} className={`nav-item ${active ? "active" : ""}`} to={item.to}>
+                <span className="nav-icon">{item.icon}</span>
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
       <div className="sidebar-footer">
