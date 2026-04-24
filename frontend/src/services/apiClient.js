@@ -1,7 +1,33 @@
 const API_URL = import.meta.env.VITE_API_URL;
 
+function isLocalApiUrl(value) {
+  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test((value || "").trim());
+}
+
+function resolveApiBaseUrl() {
+  const configured = (API_URL || "").trim().replace(/\/+$/, "");
+
+  if (typeof window === "undefined") {
+    return configured;
+  }
+
+  const currentOrigin = window.location.origin.replace(/\/+$/, "");
+  const isLocalBrowser =
+    window.location.hostname === "127.0.0.1" || window.location.hostname === "localhost";
+
+  if (!configured) {
+    return currentOrigin;
+  }
+
+  if (!isLocalBrowser && isLocalApiUrl(configured)) {
+    return currentOrigin;
+  }
+
+  return configured;
+}
+
 function buildUrl(path) {
-  return `${API_URL}${path}`;
+  return `${resolveApiBaseUrl()}${path}`;
 }
 
 async function parsePayload(response) {
@@ -18,7 +44,14 @@ export async function request(path, { accessToken, headers, ...options } = {}) {
     nextHeaders.Authorization = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(buildUrl(path), { ...options, headers: nextHeaders });
+  let response;
+  try {
+    response = await fetch(buildUrl(path), { ...options, headers: nextHeaders });
+  } catch {
+    throw new Error(
+      "Unable to reach the API. Check VITE_API_URL or make sure the backend is running."
+    );
+  }
   const payload = await parsePayload(response);
 
   if (!response.ok) {
@@ -36,11 +69,18 @@ export async function streamRequest(path, { accessToken, method = "POST", body }
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(buildUrl(path), {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : "{}"
-  });
+  let response;
+  try {
+    response = await fetch(buildUrl(path), {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : "{}"
+    });
+  } catch {
+    throw new Error(
+      "Unable to reach the API. Check VITE_API_URL or make sure the backend is running."
+    );
+  }
 
   if (!response.ok || !response.body) {
     const payload = await parsePayload(response);
@@ -58,7 +98,14 @@ export async function downloadRequest(path, { accessToken } = {}) {
     headers.Authorization = `Bearer ${accessToken}`;
   }
 
-  const response = await fetch(buildUrl(path), { headers });
+  let response;
+  try {
+    response = await fetch(buildUrl(path), { headers });
+  } catch {
+    throw new Error(
+      "Unable to reach the API. Check VITE_API_URL or make sure the backend is running."
+    );
+  }
   if (!response.ok) {
     const payload = await parsePayload(response);
     const message =
