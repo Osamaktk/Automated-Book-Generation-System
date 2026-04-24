@@ -24,12 +24,23 @@ from backend.services.notifications import notify
 router = APIRouter(tags=["chapters"])
 
 
+def _book_notes(book: dict) -> str:
+    return book.get("notes_on_outline_before") or book.get("notes") or ""
+
+
 def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
     return [
         {"chapter_number": chapter["chapter_number"], "summary": chapter["summary"]}
         for chapter in approved_chapters
         if chapter.get("summary")
     ]
+
+
+def _chapter_with_brief_fields(chapter: dict) -> dict:
+    return {
+        **chapter,
+        "chapter_notes_status": chapter.get("status", "unknown"),
+    }
 
 
 @router.get("/books/{book_id}/chapters")
@@ -47,7 +58,7 @@ async def list_chapters(
             "book_title": book["title"],
             "book_status": book["status"],
             "progress": f"{approved_count}/{len(chapters)}",
-            "chapters": chapters,
+            "chapters": [_chapter_with_brief_fields(chapter) for chapter in chapters],
         }
     except HTTPException:
         raise
@@ -64,7 +75,7 @@ async def get_chapter_route(
         chapter = get_chapter(chapter_id, client=supabase)
         if not chapter:
             raise HTTPException(404, "Chapter not found")
-        return {"chapter": chapter}
+        return {"chapter": _chapter_with_brief_fields(chapter)}
     except HTTPException:
         raise
     except Exception as exc:
@@ -111,7 +122,7 @@ async def submit_chapter_feedback(
 
             approved_chapters = get_approved_chapters(chapter["book_id"], client=supabase)
             planned_chapter_count = resolve_planned_chapter_count(
-                book.get("notes", ""),
+                _book_notes(book),
                 outline.get("content", ""),
                 feedback.editor_notes,
             )

@@ -78,9 +78,27 @@ function ChapterDetailPage() {
         <NotesPanels
           beforeNotes={book?.notes || ""}
           afterNotes={chapter.editor_notes || ""}
-          beforeLabel="Before Notes"
-          afterLabel="After Notes"
+          beforeLabel="notes_on_outline_before"
+          afterLabel="chapter editor_notes"
         />
+      </div>
+
+      <div className="card">
+        <div className="card-title">Project Brief Fields</div>
+        <div className="brief-grid">
+          <div className="brief-field">
+            <div className="meta-panel-label">chapter_notes_status</div>
+            <div className="content-box brief-value">{chapter.chapter_notes_status || chapter.status}</div>
+          </div>
+          <div className="brief-field">
+            <div className="meta-panel-label">status_outline_notes</div>
+            <div className="content-box brief-value">{book?.status_outline_notes || "not_started"}</div>
+          </div>
+          <div className="brief-field">
+            <div className="meta-panel-label">no_notes_needed</div>
+            <div className="content-box brief-value">{book?.no_notes_needed ? "true" : "false"}</div>
+          </div>
+        </div>
       </div>
 
       <div className="card">

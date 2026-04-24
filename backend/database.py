@@ -3,6 +3,10 @@ from supabase import Client
 from backend.config import supabase
 
 
+def _book_notes_value(book: dict) -> str:
+    return book.get("notes_on_outline_before") or book.get("notes") or ""
+
+
 def create_book(
     title: str,
     notes: str,
@@ -10,9 +14,23 @@ def create_book(
     client: Client = supabase,
 ) -> dict:
     """Insert a new book."""
+    status_outline_notes = (
+        "approved"
+        if status in {"outline_approved", "chapters_in_progress", "chapters_complete"}
+        else status
+    )
     result = (
         client.table("books")
-        .insert({"title": title, "notes": notes, "status": status})
+        .insert(
+            {
+                "title": title,
+                "notes": notes,
+                "notes_on_outline_before": notes,
+                "status": status,
+                "status_outline_notes": status_outline_notes,
+                "no_notes_needed": status == "chapters_complete",
+            }
+        )
         .execute()
     )
     return result.data[0]
@@ -32,7 +50,18 @@ def list_books(client: Client = supabase) -> list[dict]:
 
 def update_book_status(book_id: str, status: str, client: Client = supabase):
     """Update the status for a book visible to the current caller."""
-    client.table("books").update({"status": status}).eq("id", book_id).execute()
+    status_outline_notes = (
+        "approved"
+        if status in {"outline_approved", "chapters_in_progress", "chapters_complete"}
+        else status
+    )
+    client.table("books").update(
+        {
+            "status": status,
+            "status_outline_notes": status_outline_notes,
+            "no_notes_needed": status == "chapters_complete",
+        }
+    ).eq("id", book_id).execute()
 
 
 def create_outline(
@@ -99,6 +128,7 @@ def create_chapter(
                 "chapter_number": chapter_number,
                 "content": content,
                 "status": status,
+                "chapter_notes_status": status,
             }
         )
         .execute()
@@ -116,7 +146,7 @@ def list_book_chapters(book_id: str, client: Client = supabase) -> list[dict]:
     """List chapters for a visible book in chapter order."""
     result = (
         client.table("chapters")
-        .select("id, chapter_number, status, editor_notes, created_at")
+        .select("id, chapter_number, status, chapter_notes_status, editor_notes, created_at")
         .eq("book_id", book_id)
         .order("chapter_number")
         .execute()
@@ -151,4 +181,6 @@ def get_approved_chapters(book_id: str, client: Client = supabase) -> list[dict]
 
 def update_chapter(chapter_id: str, client: Client = supabase, **fields):
     """Update a chapter visible to the current caller."""
+    if "status" in fields and "chapter_notes_status" not in fields:
+        fields["chapter_notes_status"] = fields["status"]
     client.table("chapters").update(fields).eq("id", chapter_id).execute()

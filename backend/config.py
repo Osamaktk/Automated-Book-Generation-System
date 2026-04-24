@@ -33,6 +33,8 @@ OPENROUTER_HEADERS = {
     "HTTP-Referer": "https://autobook.railway.app",
     "X-Title": "AutoBook",
 }
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
 MODEL_CANDIDATES = [
     "meta-llama/llama-3.1-8b-instruct:free",
@@ -42,6 +44,7 @@ MODEL_CANDIDATES = [
     "google/gemma-2-9b-it",
 ]
 _openrouter_client: OpenAI | None = None
+_deepseek_client: OpenAI | None = None
 
 
 def get_supabase_client() -> Client:
@@ -101,6 +104,29 @@ def get_openrouter_client() -> OpenAI:
         return _openrouter_client
     except Exception as exc:
         logger.error("OpenRouter connection failed: %s", exc, exc_info=True)
+        raise
+
+
+def get_deepseek_client() -> OpenAI:
+    """Create the direct DeepSeek client when a DeepSeek API key is configured."""
+    global _deepseek_client
+    if _deepseek_client is not None:
+        return _deepseek_client
+
+    try:
+        api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError(
+                "Missing DEEPSEEK_API_KEY. Add it to your environment or .env file "
+                "before using direct DeepSeek generation."
+            )
+
+        client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+        logger.info("DeepSeek connected, model: %s", DEEPSEEK_MODEL)
+        _deepseek_client = client
+        return _deepseek_client
+    except Exception as exc:
+        logger.error("DeepSeek connection failed: %s", exc, exc_info=True)
         raise
 
 

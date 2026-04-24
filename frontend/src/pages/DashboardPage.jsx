@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import logoMark from "../assets/autobook-mark.svg";
 import BookCard from "../components/books/BookCard";
 import Alert from "../components/ui/Alert";
 import Loader from "../components/ui/Loader";
@@ -189,7 +190,7 @@ function DashboardPage() {
         </div>
       ) : (
         <div className="card empty-state">
-          <div className="empty-icon">AB</div>
+          <img className="empty-logo" src={logoMark} alt="AutoBook logo" />
           <h3>Your library is empty</h3>
           <p>Start your first manuscript to begin the editorial workflow.</p>
           <button className="btn btn-gold" onClick={() => setSearchParams({ tab: "create" })}>

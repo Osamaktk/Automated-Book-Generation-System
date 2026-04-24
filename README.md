@@ -8,7 +8,7 @@ Automated book generation system with a human-in-the-loop editorial workflow.
 - Generate an outline and pause for editor review
 - Regenerate the outline when revision notes are submitted
 - Generate chapters sequentially using summaries of approved earlier chapters
-- Approve, revise, or mark the last chapter as the final chapter
+- Approve chapters or request revisions until the planned chapter count is complete
 - Send optional SMTP or Microsoft Teams notifications
 - Export the final manuscript as `docx` or `pdf` only after final approval
 
@@ -19,6 +19,31 @@ Automated book generation system with a human-in-the-loop editorial workflow.
 - AI: OpenRouter-compatible chat models
 - Frontend: React + Vite
 - Output: `python-docx`, `reportlab`
+
+## Architecture
+
+The system follows a simple modular flow that matches the project brief:
+
+1. Input and Seeding
+- A book is created from title + notes in the dashboard or imported from `.csv` / `.xlsx`
+- The original brief is stored as `notes_on_outline_before`
+
+2. Outline Generation and Review
+- The backend generates an outline through the AI layer
+- The outline is saved in Supabase and paused for editor review
+- The editor can approve or request revision through the dashboard
+
+3. Chapter Engine and Context Chaining
+- After outline approval, chapters are generated sequentially
+- Each approved chapter is summarized and stored
+- Later chapter prompts use those summaries to preserve continuity
+
+4. Completion and Final Export
+- When the planned chapter count is fully approved, the manuscript is marked complete
+- Final export becomes available as `docx` or `pdf`
+
+5. Notifications
+- The backend can notify the editor through SMTP email or Teams webhook when review is needed or the book is complete
 
 ## Main API Endpoints
 
@@ -118,6 +143,15 @@ Example flow:
 - Local Excel / spreadsheet input: implemented through `/books/import`
 - Source-backed research: not implemented because it is optional in the brief
 
+### Brief Field Alignment
+
+The project brief uses some field names that differ from this app's original internal naming. The API now exposes brief-style aliases so the implementation maps more directly to the document:
+
+- `notes_on_outline_before`: the initial `book.notes` value used before outline generation
+- `status_outline_notes`: the current outline review state derived from the latest outline and book workflow status
+- `chapter_notes_status`: the review state of each chapter
+- `no_notes_needed`: `true` when the manuscript has reached final completion and export is allowed
+
 ## Submission Checklist
 
 - Code repository: complete
@@ -126,3 +160,13 @@ Example flow:
 - Dashboard screenshots: still needed
 - Video demonstration: still needed
 - Sample generated `.docx` or `.pdf`: still needed
+- Demo checklist and script: see [docs/submission_checklist.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/submission_checklist.md:1)
+
+## Presentation Pack
+
+Use these project files during final submission preparation:
+
+- Demo checklist and video speaking script: [docs/submission_checklist.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/submission_checklist.md:1)
+- Database schema reference: [docs/schema.md](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/schema.md:1)
+- Spreadsheet import template: [docs/import_template.csv](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/import_template.csv:1)
+- Optional Supabase brief-column migration: [docs/supabase_brief_column_migration.sql](/c:/Users/osama/OneDrive/Desktop/Automated%20Book%20Generation%20System/docs/supabase_brief_column_migration.sql:1)

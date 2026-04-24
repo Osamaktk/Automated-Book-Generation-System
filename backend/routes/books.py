@@ -41,6 +41,32 @@ def _serialize_event(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
+def _book_notes(book: dict) -> str:
+    return book.get("notes_on_outline_before") or book.get("notes") or ""
+
+
+def _map_outline_status(book_status: str, outline_status: str | None) -> str:
+    if outline_status == "approved" or book_status in {"outline_approved", "chapters_in_progress", "chapters_complete"}:
+        return "approved"
+    if outline_status == "needs_revision":
+        return "needs_revision"
+    if outline_status == "waiting_for_review" or book_status == "waiting_for_review":
+        return "waiting_for_review"
+    return outline_status or "not_started"
+
+
+def _with_project_brief_fields(book: dict, outline: dict | None) -> dict:
+    brief_fields = {
+        "notes_on_outline_before": _book_notes(book),
+        "status_outline_notes": book.get("status_outline_notes")
+        or _map_outline_status(book.get("status", ""), outline.get("status") if outline else None),
+        "no_notes_needed": book.get("no_notes_needed")
+        if book.get("no_notes_needed") is not None
+        else book.get("status") == "chapters_complete",
+    }
+    return {**book, **brief_fields}
+
+
 def _build_previous_summaries(approved_chapters: list[dict]) -> list[dict]:
     return [
         {"chapter_number": chapter["chapter_number"], "summary": chapter["summary"]}
@@ -55,7 +81,7 @@ def _sync_book_completion(book: dict, client: Client) -> dict:
         return book
 
     planned_chapter_count = resolve_planned_chapter_count(
-        book.get("notes", ""),
+        _book_notes(book),
         outline.get("content", ""),
     )
     approved_chapters = get_approved_chapters(book["id"], client=client)
@@ -71,13 +97,16 @@ def _sync_book_completion(book: dict, client: Client) -> dict:
 
 def _with_planned_chapter_count(book: dict, outline: dict | None) -> dict:
     if not outline:
-        return {**book, "planned_chapter_count": 0}
+        return _with_project_brief_fields({**book, "planned_chapter_count": 0}, None)
     planned_chapter_count = resolve_planned_chapter_count(
-        book.get("notes", ""),
+        _book_notes(book),
         outline.get("content", ""),
         outline.get("editor_notes", ""),
     )
-    return {**book, "planned_chapter_count": planned_chapter_count}
+    return _with_project_brief_fields(
+        {**book, "planned_chapter_count": planned_chapter_count},
+        outline,
+    )
 
 
 def _normalize_header(value: str) -> str:
@@ -166,7 +195,7 @@ def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
 
     approved_chapters = get_approved_chapters(book["id"], client=client)
     planned_chapter_count = resolve_planned_chapter_count(
-        book.get("notes", ""),
+        _book_notes(book),
         outline.get("content", ""),
     )
     if planned_chapter_count > 0 and len(approved_chapters) >= planned_chapter_count:
@@ -491,7 +520,7 @@ async def submit_outline_feedback(
             editor_notes=feedback.editor_notes,
         )
         new_content = call_ai(
-            build_outline_prompt(book["title"], book["notes"], feedback.editor_notes),
+            build_outline_prompt(book["title"], _book_notes(book), feedback.editor_notes),
             2000,
         )
         new_outline = create_outline(
@@ -622,7 +651,7 @@ async def generate_chapter_stream(
 
             approved_chapters = get_approved_chapters(book_id, client=supabase)
             planned_chapter_count = resolve_planned_chapter_count(
-                book.get("notes", ""),
+                _book_notes(book),
                 outline.get("content", ""),
             )
             if planned_chapter_count > 0 and len(approved_chapters) >= planned_chapter_count:

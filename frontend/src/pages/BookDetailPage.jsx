@@ -218,6 +218,28 @@ function BookDetailPage() {
         <NotesPanels beforeNotes={book.notes} afterNotes={outline?.editor_notes || ""} />
       </div>
 
+      <div className="card">
+        <div className="card-title">Project Brief Fields</div>
+        <div className="brief-grid">
+          <div className="brief-field">
+            <div className="meta-panel-label">notes_on_outline_before</div>
+            <div className="content-box brief-value">{book.notes_on_outline_before || "No notes added."}</div>
+          </div>
+          <div className="brief-field">
+            <div className="meta-panel-label">status_outline_notes</div>
+            <div className="content-box brief-value">{book.status_outline_notes || "not_started"}</div>
+          </div>
+          <div className="brief-field">
+            <div className="meta-panel-label">planned_chapter_count</div>
+            <div className="content-box brief-value">{String(plannedChapterCount || 0)}</div>
+          </div>
+          <div className="brief-field">
+            <div className="meta-panel-label">no_notes_needed</div>
+            <div className="content-box brief-value">{book.no_notes_needed ? "true" : "false"}</div>
+          </div>
+        </div>
+      </div>
+
       {outline ? (
         <div className="card">
           <div className="section-header">
