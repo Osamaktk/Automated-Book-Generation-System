@@ -8,7 +8,7 @@
           "value": "autobookai-osamaktks-projects.vercel.app"
         }
       ],
-      "destination": "https://autobook.ai.vercel.app",
+      "destination": "https://autobookai.vercel.app/$1",
       "permanent": true
     }
   ]
