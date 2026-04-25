@@ -146,19 +146,21 @@ function BookDetailPage() {
 
     setOutlineHistoryLoading(true);
     try {
-      const response = await getBookOutlines(bookId);
-      const outlines = Array.isArray(response?.outlines) ? response.outlines : [];
-      if (outlines.length) {
-        setOutlineHistory(outlines);
-        return;
+      try {
+        const response = await getBookOutlines(bookId);
+        const outlines = Array.isArray(response?.outlines) ? response.outlines : [];
+        if (outlines.length) {
+          setOutlineHistory(outlines);
+          return;
+        }
+      } catch {
+        // Silently fall back to the current outline when history is unavailable.
       }
-    } catch {
-      // Fall back to the current outline when the history route is unavailable.
+
+      setOutlineHistory([outline]);
     } finally {
       setOutlineHistoryLoading(false);
     }
-
-    setOutlineHistory([outline]);
   }
 
   useEffect(() => {
