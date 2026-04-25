@@ -61,6 +61,23 @@ function BookDetailPage() {
           chaptersWithWordCount.every((chapter) => chapter.status === "approved"),
     [approvedCount, chaptersWithWordCount, plannedChapterCount]
   );
+  const outlineHistoryItems = useMemo(
+    () =>
+      [...outlineHistory]
+        .sort((left, right) => {
+          const leftTime = new Date(left.created_at || 0).getTime();
+          const rightTime = new Date(right.created_at || 0).getTime();
+          return leftTime - rightTime;
+        })
+        .filter((item) => item.editor_notes && item.editor_notes.trim())
+        .map((item, index) => ({
+          label: item.created_at
+            ? `Revision ${index + 1} - ${new Date(item.created_at).toLocaleDateString()}`
+            : `Revision ${index + 1}`,
+          text: item.editor_notes
+        })),
+    [outlineHistory]
+  );
   const isComplete = book?.status === "chapters_complete";
   const outlineApproved =
     outline?.status === "approved" ||
@@ -183,23 +200,6 @@ function BookDetailPage() {
       label: `Chapter ${chapter.chapter_number}`,
       text: chapter.editor_notes
     }));
-  const outlineHistoryItems = useMemo(
-    () =>
-      [...outlineHistory]
-        .sort((left, right) => {
-          const leftTime = new Date(left.created_at || 0).getTime();
-          const rightTime = new Date(right.created_at || 0).getTime();
-          return leftTime - rightTime;
-        })
-        .filter((item) => item.editor_notes && item.editor_notes.trim())
-        .map((item, index) => ({
-          label: item.created_at
-            ? `Revision ${index + 1} - ${new Date(item.created_at).toLocaleDateString()}`
-            : `Revision ${index + 1}`,
-          text: item.editor_notes
-        })),
-    [outlineHistory]
-  );
 
   const canGenerate =
     outlineApproved &&
