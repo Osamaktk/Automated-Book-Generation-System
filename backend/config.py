@@ -37,11 +37,13 @@ DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
 MODEL_CANDIDATES = [
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "deepseek/deepseek-chat-v3-0324:free",
-    "mistralai/mistral-small-3.1-24b-instruct",
-    "qwen/qwen-2.5-7b-instruct",
-    "google/gemma-2-9b-it",
+    "openrouter/free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-3-27b-it:free",
+    "google/gemma-3-12b-it:free",
+    "deepseek/deepseek-r1:free",
+    "qwen/qwen3-8b:free",
+    "mistralai/devstral-small:free",
 ]
 _openrouter_client: OpenAI | None = None
 _deepseek_client: OpenAI | None = None
