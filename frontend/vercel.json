@@ -1,15 +1,5 @@
 {
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "autobookai-osamaktks-projects.vercel.app"
-        }
-      ],
-      "destination": "https://autobookai.vercel.app/$1",
-      "permanent": true
-    }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
