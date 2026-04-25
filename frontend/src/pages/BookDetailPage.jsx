@@ -19,6 +19,7 @@ import {
 import { getBookNotifications, getPipelineStage } from "../utils/book";
 
 function BookDetailPage() {
+  // Hooks: keep every hook declaration in this top section so render order stays stable.
   const navigate = useNavigate();
   const { bookId } = useParams();
   const { data, chapters, loading, error, reload } = useBookDetail(bookId);
@@ -77,6 +78,16 @@ function BookDetailPage() {
           text: item.editor_notes
         })),
     [outlineHistory]
+  );
+  const chapterHistory = useMemo(
+    () =>
+      chaptersWithWordCount
+        .filter((chapter) => chapter.editor_notes && chapter.editor_notes.trim())
+        .map((chapter) => ({
+          label: `Chapter ${chapter.chapter_number}`,
+          text: chapter.editor_notes
+        })),
+    [chaptersWithWordCount]
   );
   const isComplete = book?.status === "chapters_complete";
   const outlineApproved =
@@ -193,13 +204,6 @@ function BookDetailPage() {
   if (error || !book) {
     return <Alert type="error">{error || "Book not found."}</Alert>;
   }
-
-  const chapterHistory = chaptersWithWordCount
-    .filter((chapter) => chapter.editor_notes && chapter.editor_notes.trim())
-    .map((chapter) => ({
-      label: `Chapter ${chapter.chapter_number}`,
-      text: chapter.editor_notes
-    }));
 
   const canGenerate =
     outlineApproved &&
