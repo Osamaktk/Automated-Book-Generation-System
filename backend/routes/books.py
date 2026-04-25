@@ -218,7 +218,7 @@ def _generate_next_chapter_for_book(book: dict, client: Client) -> dict:
         ),
         3000,
     )
-    if not content or len(content.strip()) < 100:
+    if not content or len(content.strip()) < 500:
         raise HTTPException(500, "AI returned empty content. Please try generating again.")
     chapter = create_chapter(
         book_id=book["id"],
@@ -700,7 +700,7 @@ async def generate_chapter_stream(
                 full_content += chunk
                 yield _serialize_event({"type": "chunk", "text": chunk})
 
-            if not full_content or len(full_content.strip()) < 100:
+            if not full_content or len(full_content.strip()) < 500:
                 yield _serialize_event({
                     "type": "error",
                     "message": "AI returned empty or too-short content. Please try generating again."
