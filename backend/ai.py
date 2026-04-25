@@ -53,7 +53,7 @@ def call_ai(prompt: str, max_tokens: int = 2000) -> str:
 
 
 async def stream_ai_async(prompt: str, max_tokens: int = 2000):
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     queue: asyncio.Queue[str | None] = asyncio.Queue()
 
     def enqueue_stream(model_name: str, provider: str):
@@ -105,7 +105,7 @@ async def stream_ai_async(prompt: str, max_tokens: int = 2000):
         finally:
             loop.call_soon_threadsafe(queue.put_nowait, None)
 
-    asyncio.get_event_loop().run_in_executor(None, run_stream)
+    loop.run_in_executor(None, run_stream)
 
     while True:
         chunk = await queue.get()

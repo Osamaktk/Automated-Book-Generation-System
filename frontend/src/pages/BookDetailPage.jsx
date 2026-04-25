@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import EditorNotesHistory from "../components/shared/EditorNotesHistory";
@@ -13,6 +13,7 @@ import { useBookDetail } from "../hooks/useBookDetail";
 import {
   downloadCompiledBook,
   generateChapterStream,
+  getBookOutlines,
   submitOutlineFeedback
 } from "../services/bookService";
 import { getBookNotifications, getPipelineStage } from "../utils/book";
@@ -28,6 +29,9 @@ function BookDetailPage() {
   const [generating, setGenerating] = useState(false);
   const [streamText, setStreamText] = useState("");
   const [downloadingFormat, setDownloadingFormat] = useState("");
+  const [showOutlineHistory, setShowOutlineHistory] = useState(false);
+  const [outlineHistory, setOutlineHistory] = useState([]);
+  const [outlineHistoryLoading, setOutlineHistoryLoading] = useState(false);
 
   const book = data?.book;
   const outline = data?.outline;
@@ -37,16 +41,25 @@ function BookDetailPage() {
     () => chapters.filter((chapter) => chapter.status === "approved").length,
     [chapters]
   );
-  const pendingChapter = useMemo(
-    () => chapters.find((chapter) => chapter.status === "waiting_for_review"),
+  const chaptersWithWordCount = useMemo(
+    () =>
+      chapters.map((chapter) => ({
+        ...chapter,
+        wordCount: (chapter.content || "").trim().split(/\s+/).filter(Boolean).length
+      })),
     [chapters]
+  );
+  const pendingChapter = useMemo(
+    () => chaptersWithWordCount.find((chapter) => chapter.status === "waiting_for_review"),
+    [chaptersWithWordCount]
   );
   const allChaptersApproved = useMemo(
     () =>
       plannedChapterCount > 0
         ? approvedCount >= plannedChapterCount
-        : chapters.length > 0 && chapters.every((chapter) => chapter.status === "approved"),
-    [approvedCount, chapters, plannedChapterCount]
+        : chaptersWithWordCount.length > 0 &&
+          chaptersWithWordCount.every((chapter) => chapter.status === "approved"),
+    [approvedCount, chaptersWithWordCount, plannedChapterCount]
   );
   const isComplete = book?.status === "chapters_complete";
   const outlineApproved =
@@ -125,6 +138,35 @@ function BookDetailPage() {
     }
   }
 
+  async function fetchOutlineHistory() {
+    if (!bookId || !outline) {
+      setOutlineHistory([]);
+      return;
+    }
+
+    setOutlineHistoryLoading(true);
+    try {
+      const response = await getBookOutlines(bookId);
+      const outlines = Array.isArray(response?.outlines) ? response.outlines : [];
+      if (outlines.length) {
+        setOutlineHistory(outlines);
+        return;
+      }
+    } catch {
+      // Fall back to the current outline when the history route is unavailable.
+    } finally {
+      setOutlineHistoryLoading(false);
+    }
+
+    setOutlineHistory([outline]);
+  }
+
+  useEffect(() => {
+    if (showOutlineHistory) {
+      fetchOutlineHistory();
+    }
+  }, [showOutlineHistory, bookId, outline]);
+
   if (loading) {
     return <Loader msg="Loading manuscript..." />;
   }
@@ -133,12 +175,29 @@ function BookDetailPage() {
     return <Alert type="error">{error || "Book not found."}</Alert>;
   }
 
-  const chapterHistory = chapters
+  const chapterHistory = chaptersWithWordCount
     .filter((chapter) => chapter.editor_notes && chapter.editor_notes.trim())
     .map((chapter) => ({
       label: `Chapter ${chapter.chapter_number}`,
       text: chapter.editor_notes
     }));
+  const outlineHistoryItems = useMemo(
+    () =>
+      [...outlineHistory]
+        .sort((left, right) => {
+          const leftTime = new Date(left.created_at || 0).getTime();
+          const rightTime = new Date(right.created_at || 0).getTime();
+          return leftTime - rightTime;
+        })
+        .filter((item) => item.editor_notes && item.editor_notes.trim())
+        .map((item, index) => ({
+          label: item.created_at
+            ? `Revision ${index + 1} - ${new Date(item.created_at).toLocaleDateString()}`
+            : `Revision ${index + 1}`,
+          text: item.editor_notes
+        })),
+    [outlineHistory]
+  );
 
   const canGenerate =
     outlineApproved &&
@@ -244,9 +303,34 @@ function BookDetailPage() {
         <div className="card">
           <div className="section-header">
             <div className="card-title">Book Outline</div>
-            <StatusBadge status={outline.status} />
+            <div className="flex align-center">
+              <StatusBadge status={outline.status} />
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowOutlineHistory((current) => !current)}
+                type="button"
+              >
+                {showOutlineHistory ? "Hide revision history" : "View revision history"}
+              </button>
+            </div>
           </div>
           <div className="content-box">{outline.content}</div>
+
+          {showOutlineHistory ? (
+            <div className="mt-16">
+              <div className="card compact-card">
+                <div className="card-title">Outline Revision History</div>
+                {outlineHistoryLoading ? (
+                  <div className="helper-text">Loading revision history...</div>
+                ) : (
+                  <EditorNotesHistory
+                    items={outlineHistoryItems}
+                    emptyText="No outline revision notes yet"
+                  />
+                )}
+              </div>
+            </div>
+          ) : null}
 
           {outline.status === "waiting_for_review" ? (
             <div className="mt-24">
@@ -296,7 +380,7 @@ function BookDetailPage() {
         <EditorNotesHistory items={chapterHistory} emptyText="No chapter feedback history yet" />
       </div>
 
-      {(outlineApproved || isComplete || chapters.length > 0) ? (
+      {(outlineApproved || isComplete || chaptersWithWordCount.length > 0) ? (
         <div className="card">
           <div className="section-header">
             <div className="card-title">Chapters</div>
@@ -323,7 +407,7 @@ function BookDetailPage() {
             <div className="download-panel">
               <div className="download-panel-label">Download Final Manuscript</div>
               <div className="download-btns">
-                {["docx", "pdf"].map((format) => (
+                {["docx", "pdf", "txt"].map((format) => (
                   <button
                     key={format}
                     className="btn-download"
@@ -344,12 +428,17 @@ function BookDetailPage() {
             </div>
           ) : null}
 
-          {chapters.length ? (
-            chapters.map((chapter) => (
+          {chaptersWithWordCount.length ? (
+            chaptersWithWordCount.map((chapter) => (
               <Link key={chapter.id} className="chapter-item link-reset" to={`/books/${bookId}/chapters/${chapter.id}`}>
                 <div className="flex align-center">
                   <span className="chapter-num">Chapter {chapter.chapter_number}</span>
                   <StatusBadge status={chapter.status} />
+                  {chapter.content ? (
+                    <span className="helper-text" style={{ marginLeft: "0.75rem" }}>
+                      ~{chapter.wordCount.toLocaleString()} words
+                    </span>
+                  ) : null}
                 </div>
                 <span className="chapter-arrow">Read</span>
               </Link>

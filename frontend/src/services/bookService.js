@@ -21,6 +21,10 @@ export async function getBook(bookId, accessToken) {
   return request(`/books/${bookId}`, { accessToken });
 }
 
+export async function getBookOutlines(bookId, accessToken) {
+  return request(`/books/${bookId}/outlines`, { accessToken });
+}
+
 export async function getBookChapters(bookId, accessToken) {
   return request(`/books/${bookId}/chapters`, { accessToken });
 }

@@ -25,6 +25,10 @@ function ChapterDetailPage() {
         : [],
     [chapter]
   );
+  const wordCount = useMemo(
+    () => (chapter?.content || "").trim().split(/\s+/).filter(Boolean).length,
+    [chapter?.content]
+  );
 
   async function handleFeedback(status) {
     if (status === "needs_revision" && !revisionNotes.trim()) {
@@ -69,6 +73,9 @@ function ChapterDetailPage() {
         <h2>Reading View</h2>
         <div className="top-status">
           <StatusBadge status={chapter.status} />
+          <span className="helper-text" style={{ marginLeft: "0.75rem" }}>
+            ~{wordCount.toLocaleString()} words
+          </span>
         </div>
         <div className="header-line" />
       </div>

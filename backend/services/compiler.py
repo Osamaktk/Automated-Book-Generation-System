@@ -313,3 +313,29 @@ def compile_to_pdf(book: dict, outline: dict, chapters: list[dict]) -> bytes:
     except Exception as exc:
         logger.error("PDF compilation failed: %s", exc, exc_info=True)
         raise
+
+
+def compile_to_txt(book: dict, outline: dict, chapters: list[dict]) -> bytes:
+    try:
+        approved = _approved_chapters(chapters)
+        lines = []
+        lines.append(book["title"].strip().upper())
+        lines.append("")
+        author_name = (book.get("author") or "AutoBook").strip()
+        lines.append(f"by {author_name}")
+        lines.append("")
+        lines.append("=" * 60)
+        lines.append("")
+        for chapter in approved:
+            title = _chapter_title(outline, chapter)
+            lines.append(f"CHAPTER {chapter['chapter_number']}: {title.upper()}")
+            lines.append("")
+            for para in _clean_paragraphs(chapter.get("content", "")):
+                lines.append(para)
+                lines.append("")
+            lines.append("=" * 60)
+            lines.append("")
+        return "\n".join(lines).encode("utf-8")
+    except Exception as exc:
+        logger.error("TXT compilation failed: %s", exc, exc_info=True)
+        raise

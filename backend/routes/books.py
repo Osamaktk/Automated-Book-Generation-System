@@ -550,8 +550,8 @@ async def compile_book_route(
     format: str = "docx",
 ):
     try:
-        if format not in {"docx", "pdf"}:
-            raise HTTPException(400, "Format must be one of: docx, pdf")
+        if format not in {"docx", "pdf", "txt"}:
+            raise HTTPException(400, "Format must be one of: docx, pdf, txt")
 
         book = get_book(book_id, client=supabase)
         if not book:
@@ -604,6 +604,16 @@ async def compile_book_route(
                 iter([content]),
                 media_type="application/pdf",
                 headers=headers,
+            )
+
+        if format == "txt":
+            from backend.services.compiler import compile_to_txt
+            content = compile_to_txt(book, outline, approved_chapters)
+            logger.info("Compiled TXT document for book %s", book_id)
+            return StreamingResponse(
+                iter([content]),
+                media_type="text/plain; charset=utf-8",
+                headers={**headers, "Content-Disposition": f'attachment; filename="{slug}_{book_id[:8]}.txt"'},
             )
     except HTTPException:
         raise
