@@ -10,7 +10,12 @@ app = FastAPI(title=APP_TITLE)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://automated-book-generation-system-ct.vercel.app",
+        "https://automated-book-generation-system-cttw.vercel.app",
+        "https://*.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
