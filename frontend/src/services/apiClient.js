@@ -1,4 +1,5 @@
 const API_URL = import.meta.env.VITE_API_URL;
+console.log('API URL:', import.meta.env.VITE_API_URL);
 
 function isLocalApiUrl(value) {
   return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test((value || "").trim());
