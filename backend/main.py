@@ -12,9 +12,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "https://automated-book-generation-system.vercel.app",
         "https://automated-book-generation-system-ct.vercel.app",
         "https://automated-book-generation-system-cttw.vercel.app",
-        "https://*.vercel.app",
+        "https://automated-book-generation-system-git-b027df-osamaktks-projects.vercel.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
